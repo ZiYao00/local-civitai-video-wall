@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Local Civitai Video Wall v2</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header id="topbar" class="topbar">
+    <div class="topline">
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <div class="brand-text">
+          <h1>Local Video Wall</h1>
+          <p id="subInfo">请选择视频文件夹</p>
+        </div>
+      </div>
+      <div class="path-row">
+        <input id="pathInput" class="path-input" type="text" placeholder="输入视频文件夹路径，例如 F:\Users\Downloads\kenpechi\MP4" spellcheck="false" />
+        <button id="chooseFolderBtn" class="btn">选择文件夹</button>
+        <button id="scanBtn" class="btn primary">扫描</button>
+      </div>
+      <button id="expandBtn" class="btn expand hidden">展开</button>
+    </div>
+    <div id="controlPanel" class="control-panel">
+      <label class="check"><input id="rememberPath" type="checkbox" /><span>记住路径</span></label>
+      <label class="check"><input id="recursiveScan" type="checkbox" /><span>扫描子文件夹</span></label>
+      <input id="searchInput" class="search" type="search" placeholder="搜索文件名..." autocomplete="off" />
+      <select id="sortSelect" class="select" title="排序">
+        <option value="mtime_desc">最新修改</option>
+        <option value="mtime_asc">最早修改</option>
+        <option value="name_asc">文件名 A-Z</option>
+        <option value="name_desc">文件名 Z-A</option>
+        <option value="size_desc">文件大-小</option>
+        <option value="size_asc">文件小-大</option>
+      </select>
+      <div class="seg" id="columnsSeg" title="卡片列数">
+        <button data-columns="4">4列</button>
+        <button data-columns="5">5列</button>
+        <button data-columns="6">6列</button>
+        <button data-columns="7">7列</button>
+        <button data-columns="8">8列</button>
+        <button data-columns="9">9列</button>
+      </div>
+      <select id="playLimitSelect" class="select small" title="同时播放上限">
+        <option value="12">播放12</option>
+        <option value="18">播放18</option>
+        <option value="24">播放24</option>
+        <option value="30">播放30</option>
+      </select>
+      <button id="shuffleBtn" class="btn">随机</button>
+      <button id="pauseBtn" class="btn ghost">暂停全部</button>
+      <button id="immersiveBtn" class="btn ghost">沉浸</button>
+    </div>
+  </header>
+  <main id="mainArea">
+    <section id="grid" class="video-grid" aria-live="polite"></section>
+    <div id="emptyState" class="empty">
+      <h2>请选择视频文件夹</h2>
+      <p>你可以手动输入路径，也可以点击“选择文件夹”。扫描后，当前屏幕内的视频会自动静音循环播放。</p>
+    </div>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title"><strong id="modalName"></strong><span id="modalMeta"></span></div>
+        <div class="modal-actions"><button id="modalOpenFolder" class="btn">打开所在位置</button><button id="modalClose" class="btn ghost">关闭</button></div>
+      </div>
+      <video id="modalVideo" class="modal-video" controls loop autoplay playsinline></video>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

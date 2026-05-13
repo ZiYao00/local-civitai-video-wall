@@ -1,9 +1,9 @@
 {
   "remember_path": false,
   "last_video_dir": "",
-  "recursive": true,
+  "recursive": false,
   "columns": 6,
-  "play_limit": 12,
+  "play_limit": 24,
   "sort_mode": "mtime_desc",
   "immersive": false
 }

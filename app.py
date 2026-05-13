@@ -18,6 +18,7 @@ v2 changes:
 - Adjustable columns: 4 / 5 / 6 / 7 / 8 / 9.
 - Playback limit: 12 / 18 / 24 / 30.
 - Compact topbar and immersive mode.
+- English interface by default with Chinese language toggle.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ DEFAULT_CONFIG = {
     "play_limit": 24,
     "sort_mode": "mtime_desc",
     "immersive": False,
+    "language": "en",
 }
 
 runtime_lock = threading.Lock()
@@ -61,6 +63,10 @@ runtime_video_dir = ""
 def normalize_path(p: str) -> str:
     p = (p or "").strip().strip('"')
     return str(Path(p).expanduser()) if p else ""
+
+
+def normalize_language(value: str) -> str:
+    return "zh" if value == "zh" else "en"
 
 
 def clamp_int(value, default: int, low: int, high: int) -> int:
@@ -84,6 +90,7 @@ def load_config() -> dict:
         cfg["last_video_dir"] = ""
     cfg["columns"] = clamp_int(cfg.get("columns"), 6, 4, 9)
     cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 12, 30)
+    cfg["language"] = normalize_language(cfg.get("language", "en"))
     return cfg
 
 
@@ -95,6 +102,7 @@ def save_config(cfg: dict) -> dict:
     merged["immersive"] = bool(merged.get("immersive"))
     merged["columns"] = clamp_int(merged.get("columns"), 6, 4, 9)
     merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 12, 30)
+    merged["language"] = normalize_language(merged.get("language", "en"))
     if not merged["remember_path"]:
         merged["last_video_dir"] = ""
     else:
@@ -134,11 +142,11 @@ def safe_rel_to_path(root: Path, rel: str) -> Path:
 def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None]:
     root = Path(normalize_path(video_dir))
     if not str(root).strip():
-        return [], "路径为空，请先输入或选择一个视频文件夹。"
+        return [], "Folder path is empty. Please enter or choose a video folder first."
     if not root.exists():
-        return [], f"路径不存在：{root}"
+        return [], f"Path does not exist: {root}"
     if not root.is_dir():
-        return [], f"这不是文件夹路径：{root}"
+        return [], f"This is not a folder path: {root}"
 
     pattern = "**/*" if recursive else "*"
     files: list[Path] = []
@@ -150,7 +158,7 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
             except OSError:
                 continue
     except Exception as exc:
-        return [], f"扫描失败：{exc}"
+        return [], f"Scan failed: {exc}"
 
     try:
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -183,7 +191,7 @@ def choose_folder_dialog() -> str:
 Add-Type -AssemblyName System.Windows.Forms
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = "选择视频文件夹"
+$dialog.Description = "Choose a video folder"
 $dialog.ShowNewFolderButton = $false
 $result = $dialog.ShowDialog()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -209,7 +217,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        selected = filedialog.askdirectory(title="选择视频文件夹")
+        selected = filedialog.askdirectory(title="Choose a video folder")
         root.destroy()
         return selected or ""
     except Exception:
@@ -343,7 +351,7 @@ class AppHandler(BaseHTTPRequestHandler):
     def api_open_in_explorer(self, rel: str):
         root = get_current_video_dir()
         if root is None:
-            self.send_json({"ok": False, "error": "请先选择并扫描视频文件夹。"}, 400)
+            self.send_json({"ok": False, "error": "Please choose and scan a video folder first."}, 400)
             return
         try:
             file_path = safe_rel_to_path(root, rel)
@@ -403,6 +411,7 @@ class AppHandler(BaseHTTPRequestHandler):
             play_limit = clamp_int(payload.get("play_limit"), 24, 12, 30)
             sort_mode = payload.get("sort_mode", "mtime_desc")
             immersive = bool(payload.get("immersive", False))
+            language = normalize_language(payload.get("language", "en"))
             videos, error = scan_videos(video_dir, recursive)
             if error:
                 self.send_json({"ok": False, "error": error, "videos": []}, 400)
@@ -416,6 +425,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 "play_limit": play_limit,
                 "sort_mode": sort_mode,
                 "immersive": immersive,
+                "language": language,
             })
             self.send_json({
                 "ok": True,
@@ -435,6 +445,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 12, 30),
                 "sort_mode": payload.get("sort_mode", cfg.get("sort_mode", "mtime_desc")),
                 "immersive": bool(payload.get("immersive", cfg.get("immersive", False))),
+                "language": normalize_language(payload.get("language", cfg.get("language", "en"))),
             })
             current = str(get_current_video_dir() or "")
             if cfg.get("remember_path"):

@@ -5,5 +5,6 @@
   "columns": 6,
   "play_limit": 24,
   "sort_mode": "mtime_desc",
-  "immersive": false
+  "immersive": false,
+  "language": "en"
 }

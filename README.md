@@ -157,10 +157,6 @@ local-civitai-video-wall/
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the staged update plan.
-
-Planned highlights:
-
 Roadmap items through v1.3.0 are now implemented. See [ROADMAP.md](ROADMAP.md) for later ideas.
 
 ## License

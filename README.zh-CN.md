@@ -161,10 +161,6 @@ local-civitai-video-wall/
 
 ## 后续计划
 
-详细版本计划见 [ROADMAP.md](ROADMAP.md)。
-
-计划重点：
-
 v1.3.0 以内的路线图项目已经完成，后续想法见 [ROADMAP.md](ROADMAP.md)。
 
 ## License

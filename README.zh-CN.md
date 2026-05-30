@@ -11,6 +11,7 @@
 ## 功能特点
 
 - 本地视频文件夹扫描
+- 支持图片 + 视频混合浏览
 - 支持手动输入视频目录
 - 支持 Windows 文件夹选择框
 - 支持记住路径
@@ -20,12 +21,16 @@
 - 当前屏幕内视频自动静音循环播放
 - 滚出屏幕后自动暂停，离开较远后释放资源
 - 支持搜索文件名
+- 支持按文件大小和最近修改时间筛选
 - 支持排序：修改时间、文件名、文件大小
 - 支持随机浏览
+- 支持导出当前审核列表为 CSV
 - 支持沉浸模式
 - 点击视频后可大窗口播放
 - 支持打开视频所在位置
+- 支持安全移动到 `_video_wall_review` 或 `_video_wall_trash`
 - 默认英文界面，顶部工具栏可切换中文
+- 支持收藏、精选标记和审核筛选
 
 ## 使用场景
 
@@ -50,6 +55,12 @@
 .webm
 .mov
 .m4v
+.jpg
+.jpeg
+.png
+.gif
+.webp
+.bmp
 ```
 
 ## 使用方法
@@ -139,6 +150,7 @@ local-civitai-video-wall/
 ├─ CHANGELOG.md
 ├─ LICENSE
 ├─ config.example.json
+├─ review_data.json      （仅本地使用，Git 会忽略）
 ├─ assets/
 │  └─ preview01.gif
 └─ static/
@@ -149,12 +161,11 @@ local-civitai-video-wall/
 
 ## 后续计划
 
-- 收藏功能
-- 删除 / 移动文件，并加入更安全的确认流程
-- 标记精选视频
-- 支持图片 + 视频混合浏览
-- 支持更多排序和筛选方式
-- 支持导出素材清单
+详细版本计划见 [ROADMAP.md](ROADMAP.md)。
+
+计划重点：
+
+v1.3.0 以内的路线图项目已经完成，后续想法见 [ROADMAP.md](ROADMAP.md)。
 
 ## License
 

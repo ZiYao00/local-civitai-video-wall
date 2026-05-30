@@ -11,6 +11,7 @@ It is designed for quickly scanning large folders of local short video assets, e
 ## Features
 
 - Scan a local video folder
+- Browse videos and images in one wall
 - Enter a folder path manually
 - Use a Windows folder picker
 - Remember the last folder path
@@ -20,12 +21,16 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Autoplay visible videos silently in a loop
 - Pause off-screen videos and release distant resources
 - Search by filename
+- Filter by file size and recent modified date
 - Sort by modified time, filename, or file size
 - Shuffle browsing
+- Export the current review list to CSV
 - Immersive mode
 - Open a clicked video in a larger player
 - Show a video file in its folder
+- Move files safely to `_video_wall_review` or `_video_wall_trash`
 - English interface by default, with a Chinese toggle in the top toolbar
+- Favorite clips, mark selected clips, and filter review results
 
 ## Use Cases
 
@@ -48,6 +53,12 @@ It is designed for quickly scanning large folders of local short video assets, e
 .webm
 .mov
 .m4v
+.jpg
+.jpeg
+.png
+.gif
+.webp
+.bmp
 ```
 
 ## Usage
@@ -135,6 +146,7 @@ local-civitai-video-wall/
 ├─ CHANGELOG.md
 ├─ LICENSE
 ├─ config.example.json
+├─ review_data.json      (local only, ignored by Git)
 ├─ assets/
 │  └─ preview01.gif
 └─ static/
@@ -145,12 +157,11 @@ local-civitai-video-wall/
 
 ## Roadmap
 
-- Favorites
-- Delete / move files with safer confirmation
-- Mark selected videos
-- Mixed image + video browsing
-- More sorting and filtering options
-- Export a media list
+See [ROADMAP.md](ROADMAP.md) for the staged update plan.
+
+Planned highlights:
+
+Roadmap items through v1.3.0 are now implemented. See [ROADMAP.md](ROADMAP.md) for later ideas.
 
 ## License
 

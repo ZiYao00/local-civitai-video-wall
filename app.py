@@ -28,6 +28,7 @@ import mimetypes
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -42,8 +43,13 @@ PORT = 8787
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 CONFIG_FILE = BASE_DIR / "config.json"
+REVIEW_FILE = BASE_DIR / "review_data.json"
+ACTION_LOG_FILE = BASE_DIR / "file_actions.log"
 
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
+INTERNAL_MEDIA_DIRS = {"_video_wall_trash", "_video_wall_review"}
 
 DEFAULT_CONFIG = {
     "remember_path": False,
@@ -58,6 +64,7 @@ DEFAULT_CONFIG = {
 
 runtime_lock = threading.Lock()
 runtime_video_dir = ""
+review_lock = threading.Lock()
 
 
 def normalize_path(p: str) -> str:
@@ -111,6 +118,76 @@ def save_config(cfg: dict) -> dict:
     return merged
 
 
+def load_review_data() -> dict:
+    if not REVIEW_FILE.exists():
+        return {"items": {}}
+    try:
+        data = json.loads(REVIEW_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {"items": {}}
+    items = data.get("items")
+    return {"items": items if isinstance(items, dict) else {}}
+
+
+def save_review_data(data: dict) -> dict:
+    clean = {"items": data.get("items", {}) if isinstance(data.get("items"), dict) else {}}
+    REVIEW_FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+    return clean
+
+
+def review_for_key(data: dict, key: str) -> dict:
+    item = data.get("items", {}).get(key, {})
+    return {
+        "favorite": bool(item.get("favorite", False)),
+        "selected": bool(item.get("selected", False)),
+    }
+
+
+def update_review_item(key: str, changes: dict) -> dict:
+    key = str(key or "").strip()
+    if not key:
+        raise ValueError("Missing review key")
+    with review_lock:
+        data = load_review_data()
+        items = data.setdefault("items", {})
+        current = review_for_key(data, key)
+        if "favorite" in changes:
+            current["favorite"] = bool(changes.get("favorite"))
+        if "selected" in changes:
+            current["selected"] = bool(changes.get("selected"))
+        if current["favorite"] or current["selected"]:
+            current["updated_at"] = int(time.time())
+            items[key] = current
+        else:
+            items.pop(key, None)
+        save_review_data(data)
+        return review_for_key(data, key)
+
+
+def unique_destination(dest_dir: Path, filename: str) -> Path:
+    dest = dest_dir / filename
+    if not dest.exists():
+        return dest
+    stem = dest.stem
+    suffix = dest.suffix
+    for i in range(1, 10000):
+        candidate = dest_dir / f"{stem}_{i}{suffix}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("Could not create a unique destination filename")
+
+
+def log_file_action(action: str, source: Path, destination: Path) -> None:
+    record = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "action": action,
+        "source": str(source),
+        "destination": str(destination),
+    }
+    with ACTION_LOG_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
 def get_current_video_dir() -> Path | None:
     with runtime_lock:
         p = runtime_video_dir
@@ -153,7 +230,9 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
     try:
         for p in root.glob(pattern):
             try:
-                if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS:
+                if any(part in INTERNAL_MEDIA_DIRS for part in p.parts):
+                    continue
+                if p.is_file() and p.suffix.lower() in MEDIA_EXTENSIONS:
                     files.append(p)
             except OSError:
                 continue
@@ -166,19 +245,27 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
         files.sort(key=lambda p: str(p).lower())
 
     videos = []
+    review_data = load_review_data()
     root_resolved = root.resolve()
     for i, p in enumerate(files):
         try:
             st = p.stat()
+            key = str(p.resolve())
             rel = p.resolve().relative_to(root_resolved).as_posix()
+            review = review_for_key(review_data, key)
+            media_type = "video" if p.suffix.lower() in VIDEO_EXTENSIONS else "image"
             videos.append({
                 "id": i,
+                "key": key,
+                "type": media_type,
                 "name": p.name,
                 "rel": rel,
                 "url": "/media?path=" + quote(rel, safe=""),
                 "size_mb": round(st.st_size / 1024 / 1024, 2),
                 "mtime": int(st.st_mtime),
                 "mtime_text": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
+                "favorite": review["favorite"],
+                "selected": review["selected"],
             })
         except Exception:
             continue
@@ -368,6 +455,46 @@ class AppHandler(BaseHTTPRequestHandler):
             subprocess.Popen(["xdg-open", str(file_path.parent)])
             self.send_json({"ok": True})
 
+    def api_file_action(self, payload: dict):
+        root = get_current_video_dir()
+        if root is None:
+            self.send_json({"ok": False, "error": "Please choose and scan a media folder first."}, 400)
+            return
+        if not bool(payload.get("confirm", False)):
+            self.send_json({"ok": False, "error": "Confirmation is required."}, 400)
+            return
+        action = str(payload.get("action", "")).strip()
+        if action not in {"move_review", "move_trash"}:
+            self.send_json({"ok": False, "error": "Unsupported file action."}, 400)
+            return
+        rel = payload.get("rel", "")
+        try:
+            file_path = safe_rel_to_path(root, rel)
+        except ValueError:
+            self.send_json({"ok": False, "error": "Invalid path"}, 403)
+            return
+        if not file_path.exists() or not file_path.is_file():
+            self.send_json({"ok": False, "error": "File not found"}, 404)
+            return
+        target_name = "_video_wall_review" if action == "move_review" else "_video_wall_trash"
+        target_dir = root.resolve() / target_name
+        if target_name in file_path.parts:
+            self.send_json({"ok": False, "error": "File is already inside the target folder."}, 400)
+            return
+        target_dir.mkdir(exist_ok=True)
+        dest = unique_destination(target_dir, file_path.name)
+        try:
+            shutil.move(str(file_path), str(dest))
+        except Exception as exc:
+            self.send_json({"ok": False, "error": f"Move failed: {exc}"}, 500)
+            return
+        log_file_action(action, file_path, dest)
+        try:
+            new_rel = dest.resolve().relative_to(root.resolve()).as_posix()
+        except Exception:
+            new_rel = dest.name
+        self.send_json({"ok": True, "action": action, "destination": str(dest), "new_rel": new_rel})
+
     def do_GET(self):
         path, _, query = self.path.partition("?")
         qs = parse_qs(query)
@@ -384,6 +511,9 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/open":
             rel = qs.get("path", [""])[0]
             self.api_open_in_explorer(rel)
+            return
+        if path == "/api/review":
+            self.send_json({"ok": True, "review": load_review_data()})
             return
         if path == "/media":
             rel = qs.get("path", [""])[0]
@@ -454,6 +584,17 @@ class AppHandler(BaseHTTPRequestHandler):
                 cfg["last_video_dir"] = ""
             cfg = save_config(cfg)
             self.send_json({"ok": True, "config": cfg})
+            return
+        if path == "/api/review":
+            try:
+                review = update_review_item(payload.get("key", ""), payload)
+            except ValueError as exc:
+                self.send_json({"ok": False, "error": str(exc)}, 400)
+                return
+            self.send_json({"ok": True, "review": review})
+            return
+        if path == "/api/file-action":
+            self.api_file_action(payload)
             return
         self.send_error(404)
 

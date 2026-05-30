@@ -2,6 +2,7 @@
 
 ## 1.3.0 - 2026-05-30
 
+- Added `service.bat` for background start, stop, startup install, startup uninstall, browser open, and status checks.
 - Added mixed video and image browsing.
 - Added media type filters for all / videos / images.
 - Added safe file actions from the modal.

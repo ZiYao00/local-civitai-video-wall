@@ -67,13 +67,23 @@
 
 ### 1. 启动工具
 
+手动模式：
+
 双击：
 
 ```text
 start.bat
 ```
 
-浏览器会自动打开。
+浏览器会自动打开，并显示命令行窗口。关闭这个命令行窗口就等于退出工具。
+
+服务模式：
+
+```text
+service.bat
+```
+
+这个文件会打开英文菜单，可以选择后台启动、停止后台服务、安装开机自启、取消开机自启、打开浏览器或检查状态。
 
 也可以在命令行运行：
 
@@ -145,6 +155,7 @@ config.json
 local-civitai-video-wall/
 ├─ app.py
 ├─ start.bat
+├─ service.bat
 ├─ README.md
 ├─ README.zh-CN.md
 ├─ CHANGELOG.md

@@ -65,13 +65,23 @@ It is designed for quickly scanning large folders of local short video assets, e
 
 ### 1. Start the app
 
+Manual mode:
+
 Double-click:
 
 ```text
 start.bat
 ```
 
-The browser will open automatically.
+The browser will open automatically. A command window stays visible while the app is running. Closing that command window stops the app.
+
+Service mode:
+
+```text
+service.bat
+```
+
+This opens an English menu where you can start the app in the background, stop the background service, install startup, uninstall startup, open the browser, or check status.
 
 You can also run:
 
@@ -141,6 +151,7 @@ This file can contain local folder paths, so it should not be uploaded to GitHub
 local-civitai-video-wall/
 ├─ app.py
 ├─ start.bat
+├─ service.bat
 ├─ README.md
 ├─ README.zh-CN.md
 ├─ CHANGELOG.md

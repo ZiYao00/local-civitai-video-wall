@@ -3,7 +3,7 @@ r"""
 Local Civitai-style Video Wall v2
 
 Usage:
-1. Make sure Python 3.9+ is installed.
+1. Make sure Python 3.10+ is installed. Python 3.12 is recommended.
 2. Double-click start.bat, or run:
    python app.py
 3. Open:
@@ -288,39 +288,185 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
     return videos, None
 
 
-def choose_folder_dialog() -> str:
-    if os.name == "nt":
-        script = r"""
+def _choose_modern_windows_folder(title: str) -> str | None:
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        ole32 = ctypes.WinDLL("ole32")
+
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", wintypes.BYTE * 8),
+            ]
+
+        ole32.CLSIDFromString.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(GUID)]
+        ole32.CLSIDFromString.restype = ctypes.c_long
+        ole32.CoInitializeEx.argtypes = [ctypes.c_void_p, wintypes.DWORD]
+        ole32.CoInitializeEx.restype = ctypes.c_long
+        ole32.CoUninitialize.argtypes = []
+        ole32.CoUninitialize.restype = None
+        ole32.CoCreateInstance.argtypes = [
+            ctypes.POINTER(GUID),
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(GUID),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        ole32.CoCreateInstance.restype = ctypes.c_long
+        ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+        ole32.CoTaskMemFree.restype = None
+
+        def make_guid(value: str) -> GUID:
+            guid = GUID()
+            hr = ole32.CLSIDFromString(value, ctypes.byref(guid))
+            if hr < 0:
+                raise OSError(hr)
+            return guid
+
+        clsid_file_open_dialog = make_guid("{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}")
+        iid_file_open_dialog = make_guid("{D57C7288-D4AD-4768-BE02-9D969532D960}")
+
+        coinit_apartmentthreaded = 0x2
+        clsctx_inproc_server = 0x1
+        fos_pickfolders = 0x20
+        fos_forcefilesystem = 0x40
+        fos_nochangedir = 0x8
+        fos_pathmustexist = 0x800
+        sigdn_filesyspath = 0x80058000
+        hresult_cancelled = -2147023673
+
+        initialized = False
+        dialog = ctypes.c_void_p()
+        item = ctypes.c_void_p()
+        name_ptr = ctypes.c_void_p()
+        release_dialog = None
+        release_item = None
+
+        hr = ole32.CoInitializeEx(None, coinit_apartmentthreaded)
+        if hr >= 0:
+            initialized = True
+        elif hr != -2147417850:
+            return None
+
+        try:
+            hr = ole32.CoCreateInstance(
+                ctypes.byref(clsid_file_open_dialog),
+                None,
+                clsctx_inproc_server,
+                ctypes.byref(iid_file_open_dialog),
+                ctypes.byref(dialog),
+            )
+            if hr < 0 or not dialog.value:
+                return None
+
+            dialog_vtbl = ctypes.cast(dialog, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+
+            def dialog_method(index, restype, *argtypes):
+                return ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)(dialog_vtbl[index])
+
+            get_options = dialog_method(10, ctypes.c_long, ctypes.POINTER(wintypes.DWORD))
+            set_options = dialog_method(9, ctypes.c_long, wintypes.DWORD)
+            set_title = dialog_method(17, ctypes.c_long, wintypes.LPCWSTR)
+            set_ok_label = dialog_method(18, ctypes.c_long, wintypes.LPCWSTR)
+            show = dialog_method(3, ctypes.c_long, wintypes.HWND)
+            get_result = dialog_method(20, ctypes.c_long, ctypes.POINTER(ctypes.c_void_p))
+            release_dialog = dialog_method(2, wintypes.ULONG)
+
+            options = wintypes.DWORD()
+            hr = get_options(dialog, ctypes.byref(options))
+            if hr < 0:
+                return None
+            hr = set_options(
+                dialog,
+                options.value | fos_pickfolders | fos_forcefilesystem | fos_nochangedir | fos_pathmustexist,
+            )
+            if hr < 0:
+                return None
+            set_title(dialog, title)
+            set_ok_label(dialog, "Select Folder")
+
+            hr = show(dialog, None)
+            if hr == hresult_cancelled:
+                return ""
+            if hr < 0:
+                return None
+
+            hr = get_result(dialog, ctypes.byref(item))
+            if hr < 0 or not item.value:
+                return None
+
+            item_vtbl = ctypes.cast(item, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+
+            def item_method(index, restype, *argtypes):
+                return ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)(item_vtbl[index])
+
+            get_display_name = item_method(5, ctypes.c_long, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p))
+            release_item = item_method(2, wintypes.ULONG)
+
+            hr = get_display_name(item, sigdn_filesyspath, ctypes.byref(name_ptr))
+            if hr < 0 or not name_ptr.value:
+                return None
+            return ctypes.wstring_at(name_ptr)
+        finally:
+            if name_ptr.value:
+                ole32.CoTaskMemFree(name_ptr)
+            if item.value and release_item:
+                release_item(item)
+            if dialog.value and release_dialog:
+                release_dialog(dialog)
+            if initialized:
+                ole32.CoUninitialize()
+    except Exception:
+        return None
+
+
+def _choose_legacy_windows_folder(title: str) -> str:
+    script = r"""
 Add-Type -AssemblyName System.Windows.Forms
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = "Choose a video folder"
+$dialog.Description = "__TITLE__"
 $dialog.ShowNewFolderButton = $false
 $result = $dialog.ShowDialog()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   Write-Output $dialog.SelectedPath
 }
-"""
-        try:
-            completed = subprocess.run(
-                ["powershell", "-NoProfile", "-STA", "-Command", script],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-            selected = completed.stdout.strip()
-            if selected:
-                return selected
-        except Exception:
-            pass
+""".replace("__TITLE__", title.replace('"', "'"))
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-STA", "-Command", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        return completed.stdout.strip()
+    except Exception:
+        return ""
+
+
+def choose_folder_dialog() -> str:
+    title = "Choose a video folder"
+    if os.name == "nt":
+        selected = _choose_modern_windows_folder(title)
+        if selected is not None:
+            return selected
+        selected = _choose_legacy_windows_folder(title)
+        if selected:
+            return selected
     try:
         import tkinter as tk
         from tkinter import filedialog
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        selected = filedialog.askdirectory(title="Choose a video folder")
+        selected = filedialog.askdirectory(title=title)
         root.destroy()
         return selected or ""
     except Exception:

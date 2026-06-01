@@ -21,6 +21,7 @@ echo 3. Install startup
 echo 4. Uninstall startup
 echo 5. Open browser
 echo 6. Check status
+echo 7. Restart background service
 echo 0. Exit
 echo.
 set /p "choice=Choose: "
@@ -31,6 +32,7 @@ if "%choice%"=="3" goto install_startup
 if "%choice%"=="4" goto uninstall_startup
 if "%choice%"=="5" goto open_browser
 if "%choice%"=="6" goto check_status
+if "%choice%"=="7" goto restart_service
 if "%choice%"=="0" goto end
 goto menu
 
@@ -124,6 +126,30 @@ goto menu
 echo.
 call :status_line
 echo.
+pause
+goto menu
+
+:restart_service
+set "FOUND=0"
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%APP_PORT% .*LISTENING"') do (
+  set "FOUND=1"
+  taskkill /PID %%P /F >nul 2>nul
+)
+if "%FOUND%"=="1" (
+  echo Existing service stopped.
+) else (
+  echo Service was not running.
+)
+timeout /t 1 /nobreak >nul
+call :write_vbs
+wscript "%VBS_PATH%"
+timeout /t 2 /nobreak >nul
+call :is_running
+if "%RUNNING%"=="1" (
+  echo Service restarted in background.
+) else (
+  echo Service did not restart. Check that Python is installed.
+)
 pause
 goto menu
 

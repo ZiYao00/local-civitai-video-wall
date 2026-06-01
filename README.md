@@ -14,10 +14,10 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Browse videos and images in one wall
 - Start a fullscreen image-only slideshow from an image modal
 - Enter a folder path manually
-- Use a Windows folder picker
+- Use a modern Windows folder picker
 - Remember the last folder path
 - Scan subfolders
-- Switch between 4 / 5 / 6 / 7 / 8 / 9 columns
+- Switch between 4 / 5 / 6 / 7 / 8 / 9 / 12 / 16 columns
 - Limit simultaneous playback to 12 / 18 / 24 / 30 videos
 - Autoplay visible videos silently in a loop
 - Pause off-screen videos and release distant resources
@@ -27,11 +27,11 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Shuffle browsing
 - Export the current review list to CSV
 - Immersive mode
-- Open a clicked video in a larger player
+- Open a clicked video in a larger overlay player with previous / next, playback mode, volume wheel, fullscreen, and hide / show controls
 - Show a video file in its folder
 - Move files safely to `_video_wall_review` or `_video_wall_trash`
-- Slideshow controls: play / pause, previous / next, interval, effect, fit, and loop
-- Slideshow effects: fade, slide, drift, and random
+- Slideshow controls: play / pause, previous / next, 1-15s interval, effect, fit, loop, fullscreen, and show / hide controls
+- Slideshow effects: none, fade, slide, drift, and random
 - English interface by default, with a Chinese toggle in the top toolbar
 - Favorite clips, mark selected clips, and filter review results
 
@@ -46,8 +46,10 @@ It is designed for quickly scanning large folders of local short video assets, e
 ## Requirements
 
 - Windows 10 / Windows 11
-- Python 3.9 or later
+- Python 3.10 or later. Python 3.12 is recommended.
 - Chrome or Edge recommended
+
+This project runs as a local Python service. If Python is not installed, `start.bat` and `service.bat` cannot start the app directly.
 
 ## Supported Formats
 
@@ -84,7 +86,7 @@ Service mode:
 service.bat
 ```
 
-This opens an English menu where you can start the app in the background, stop the background service, install startup, uninstall startup, open the browser, or check status.
+This opens an English menu where you can start the app in the background, stop or restart the background service, install startup, uninstall startup, open the browser, or check status.
 
 You can also run:
 
@@ -128,7 +130,7 @@ Playback limit 12 or 18
 Fast screening:
 
 ```text
-8 or 9 columns
+8, 9, 12, or 16 columns
 Playback limit 24 or 30
 ```
 

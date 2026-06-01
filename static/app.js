@@ -19,17 +19,23 @@ const state = {
   slideshowIndex: 0,
   slideshowPlaying: true,
   slideshowTimer: null,
+  slideshowCleanupTimer: null,
   slideshowActiveLayer: 0,
   slideshowInterval: 5,
   slideshowEffect: "drift",
   slideshowFit: "contain",
   slideshowLoop: true,
+  slideshowControlsHidden: false,
+  videoMode: "loop",
+  modalControlsHidden: false,
+  modalWheelTime: 0,
   scannedPath: "",
   updateTimer: null,
 };
 
-const COLUMN_WIDTHS = { 4: 300, 5: 260, 6: 220, 7: 190, 8: 165, 9: 145 };
-const COLUMN_GAPS = { 4: 18, 5: 18, 6: 18, 7: 16, 8: 14, 9: 12 };
+const COLUMN_WIDTHS = { 4: 300, 5: 260, 6: 220, 7: 190, 8: 165, 9: 145, 12: 94, 16: 66 };
+const COLUMN_GAPS = { 4: 18, 5: 18, 6: 18, 7: 16, 8: 14, 9: 12, 12: 8, 16: 6 };
+const COLUMN_OPTIONS = Object.keys(COLUMN_WIDTHS).map(Number);
 
 const i18n = {
   en: {
@@ -82,12 +88,21 @@ const i18n = {
     play: "Play",
     pause: "Pause",
     loop: "Loop",
+    none: "None",
     fade: "Fade",
     slide: "Slide",
     drift: "Drift",
     random: "Random",
     contain: "Contain",
     cover: "Cover",
+    hideUi: "Hide UI",
+    showUi: "Show UI",
+    loopOne: "Loop One",
+    sequential: "Sequential",
+    randomPlay: "Random",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit Fullscreen",
+    volumeLabel: "Volume",
     noImages: "No images in the current filtered list.",
     location: "Folder",
     langToggle: "中文",
@@ -185,12 +200,21 @@ const i18n = {
     play: "播放",
     pause: "暂停",
     loop: "循环",
+    none: "无",
     fade: "淡入淡出",
     slide: "滑动",
     drift: "动态漂移",
     random: "随机",
     contain: "完整显示",
     cover: "填满屏幕",
+    hideUi: "隐藏控制",
+    showUi: "显示控制",
+    loopOne: "单个循环",
+    sequential: "顺序播放",
+    randomPlay: "随机播放",
+    fullscreen: "全屏",
+    exitFullscreen: "退出全屏",
+    volumeLabel: "音量",
     noImages: "当前筛选结果里没有图片。",
     location: "位置",
     langToggle: "English",
@@ -265,6 +289,7 @@ const langToggle = $("#langToggle");
 const emptyState = $("#emptyState");
 const toast = $("#toast");
 const modal = $("#modal");
+const modalContent = $(".modal-content");
 const modalVideo = $("#modalVideo");
 const modalImage = $("#modalImage");
 const modalName = $("#modalName");
@@ -274,6 +299,13 @@ const modalOpenFolder = $("#modalOpenFolder");
 const modalMoveReview = $("#modalMoveReview");
 const modalMoveTrash = $("#modalMoveTrash");
 const modalSlideshow = $("#modalSlideshow");
+const modalPrev = $("#modalPrev");
+const modalNext = $("#modalNext");
+const modalVideoControls = $("#modalVideoControls");
+const modalVideoModeSeg = $("#modalVideoModeSeg");
+const modalFullscreen = $("#modalFullscreen");
+const modalVideoUiToggle = $("#modalVideoUiToggle");
+const modalVideoUiShow = $("#modalVideoUiShow");
 const slideshow = $("#slideshow");
 const slideshowImageA = $("#slideshowImageA");
 const slideshowImageB = $("#slideshowImageB");
@@ -283,14 +315,37 @@ const slideshowClose = $("#slideshowClose");
 const slideshowPrev = $("#slideshowPrev");
 const slideshowPlay = $("#slideshowPlay");
 const slideshowNext = $("#slideshowNext");
+const slideshowSidePrev = $("#slideshowSidePrev");
+const slideshowSideNext = $("#slideshowSideNext");
 const slideshowInterval = $("#slideshowInterval");
 const slideshowEffect = $("#slideshowEffect");
 const slideshowFit = $("#slideshowFit");
 const slideshowLoop = $("#slideshowLoop");
 const slideshowLoopLabel = $("#slideshowLoopLabel");
+const slideshowFullscreen = $("#slideshowFullscreen");
+const slideshowUiToggle = $("#slideshowUiToggle");
+const slideshowUiShow = $("#slideshowUiShow");
 
 function t() {
   return i18n[state.language] || i18n.en;
+}
+
+function labelText(key, en, zh) {
+  return t()[key] || (state.language === "zh" ? zh : en);
+}
+
+function isModalFullscreen() {
+  return document.fullscreenElement === modalContent;
+}
+
+function isSlideshowFullscreen() {
+  return document.fullscreenElement === slideshow;
+}
+
+function updateFullscreenLabels() {
+  const tx = t();
+  modalFullscreen.textContent = isModalFullscreen() ? tx.exitFullscreen : tx.fullscreen;
+  slideshowFullscreen.textContent = isSlideshowFullscreen() ? tx.exitFullscreen : tx.fullscreen;
 }
 
 function fmtBytes(mb) {
@@ -361,11 +416,21 @@ function applyLanguage() {
   modalMoveTrash.textContent = tx.moveTrash;
   modalOpenFolder.textContent = tx.showInFolder;
   modalClose.textContent = tx.close;
+  modalVideoModeSeg.querySelector('[data-video-mode="loop"]').textContent = tx.loopOne;
+  modalVideoModeSeg.querySelector('[data-video-mode="sequence"]').textContent = tx.sequential;
+  modalVideoModeSeg.querySelector('[data-video-mode="random"]').textContent = tx.randomPlay;
+  updateFullscreenLabels();
+  modalVideoUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
+  modalVideoUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
   slideshowClose.textContent = tx.close;
   slideshowPrev.textContent = tx.prev;
   slideshowNext.textContent = tx.next;
   slideshowPlay.textContent = state.slideshowPlaying ? tx.pause : tx.play;
   slideshowLoopLabel.textContent = tx.loop;
+  updateFullscreenLabels();
+  slideshowUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
+  slideshowUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
+  slideshowEffect.querySelector('[value="none"]').textContent = tx.none;
   slideshowEffect.querySelector('[value="fade"]').textContent = tx.fade;
   slideshowEffect.querySelector('[value="slide"]').textContent = tx.slide;
   slideshowEffect.querySelector('[value="drift"]').textContent = tx.drift;
@@ -396,6 +461,7 @@ function applyLayout() {
   document.documentElement.style.setProperty("--columns", cols);
   document.documentElement.style.setProperty("--card-w", `${width}px`);
   document.documentElement.style.setProperty("--gap", `${gap}px`);
+  document.body.classList.toggle("dense-grid", cols >= 12);
   columnsSeg.querySelectorAll("button").forEach(btn => {
     btn.classList.toggle("active", Number(btn.dataset.columns) === cols);
   });
@@ -714,7 +780,22 @@ function resumeVisibleInline() {
   scheduleUpdatePlaying();
 }
 
-function openModal(item) {
+function updateVideoModeUI() {
+  modalVideoModeSeg.querySelectorAll("button[data-video-mode]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.videoMode === state.videoMode);
+  });
+  modalVideo.loop = state.videoMode === "loop";
+}
+
+function updateModalNav() {
+  const currentType = state.currentModalItem?.type;
+  const items = currentType === "image" ? currentImageItems() : currentType === "video" ? currentVideoItems() : [];
+  const canNavigate = items.length > 1;
+  modalPrev.classList.toggle("hidden", !canNavigate);
+  modalNext.classList.toggle("hidden", !canNavigate);
+}
+
+function renderModalItem(item) {
   state.currentModalItem = item;
   modalName.textContent = item.name;
   modalMeta.textContent = `${item.type || "video"} · ${fmtBytes(item.size_mb)} · ${item.mtime_text} · ${item.rel}`;
@@ -724,25 +805,39 @@ function openModal(item) {
   modalVideo.classList.toggle("hidden", item.type === "image");
   modalImage.classList.toggle("hidden", item.type !== "image");
   modalSlideshow.classList.toggle("hidden", item.type !== "image");
+  modalVideoControls.classList.toggle("hidden", item.type !== "video");
+  modalContent.classList.toggle("is-video", item.type === "video");
   if (item.type === "image") {
     modalImage.src = item.url;
     modalImage.alt = item.name;
   } else {
     modalVideo.src = item.url;
     modalVideo.muted = false;
-    modalVideo.loop = true;
+    updateVideoModeUI();
   }
+  updateModalNav();
+}
+
+function openModal(item) {
+  renderModalItem(item);
+  setModalControlsHidden(false);
   modal.classList.remove("hidden");
   pauseAllInline();
-  if (item.type !== "image") setTimeout(() => modalVideo.play().catch(() => {}), 30);
+  if (item.type !== "image") playModalVideoSoon();
 }
 
 function closeModal() {
+  if (isModalFullscreen()) document.exitFullscreen?.();
   modalVideo.pause();
   modalVideo.removeAttribute("src");
   modalVideo.load();
   modalImage.removeAttribute("src");
   modalSlideshow.classList.add("hidden");
+  modalVideoControls.classList.add("hidden");
+  modalContent.classList.remove("is-video", "controls-hidden");
+  modalVideoUiShow.classList.add("hidden");
+  modalPrev.classList.add("hidden");
+  modalNext.classList.add("hidden");
   modal.classList.add("hidden");
   state.currentModalItem = null;
   if (state.playingEnabled) resumeVisibleInline();
@@ -750,6 +845,50 @@ function closeModal() {
 
 function currentImageItems() {
   return state.view.filter(item => item.type === "image");
+}
+
+function currentVideoItems() {
+  return state.view.filter(item => item.type === "video");
+}
+
+function showModalImage(direction = 1) {
+  const current = state.currentModalItem;
+  if (!current || current.type !== "image") return;
+  const images = currentImageItems();
+  if (images.length < 2) return;
+  let index = images.findIndex(item => item.key === current.key);
+  if (index < 0) index = 0;
+  const next = (index + direction + images.length) % images.length;
+  renderModalItem(images[next]);
+}
+
+function playModalVideoSoon() {
+  setTimeout(() => modalVideo.play().catch(() => {}), 30);
+}
+
+function showModalVideo(direction = 1) {
+  const current = state.currentModalItem;
+  if (!current || current.type !== "video") return;
+  const videos = currentVideoItems();
+  if (videos.length < 2) return;
+  let next = 0;
+  if (direction === 0) {
+    next = Math.floor(Math.random() * videos.length);
+    if (videos.length > 1 && videos[next].key === current.key) next = (next + 1) % videos.length;
+  } else {
+    let index = videos.findIndex(item => item.key === current.key);
+    if (index < 0) index = 0;
+    next = (index + direction + videos.length) % videos.length;
+  }
+  renderModalItem(videos[next]);
+  playModalVideoSoon();
+}
+
+function adjustModalVideoVolume(delta) {
+  const next = Math.max(0, Math.min(1, modalVideo.volume + delta));
+  modalVideo.volume = next;
+  if (next > 0) modalVideo.muted = false;
+  showToast(`${t().volumeLabel} ${Math.round(next * 100)}%`, 900);
 }
 
 function resolveSlideshowEffect() {
@@ -775,18 +914,30 @@ function renderSlideshow(direction = 1) {
   const incoming = state.slideshowActiveLayer === 0 ? slideshowImageB : slideshowImageA;
   const outgoing = state.slideshowActiveLayer === 0 ? slideshowImageA : slideshowImageB;
   const effect = resolveSlideshowEffect();
+  clearTimeout(state.slideshowCleanupTimer);
   incoming.className = "slideshow-image";
-  outgoing.classList.add("hidden");
+  outgoing.className = "slideshow-image";
   incoming.classList.remove("hidden");
   incoming.src = item.url;
   incoming.alt = item.name;
   incoming.style.objectFit = state.slideshowFit;
   outgoing.style.objectFit = state.slideshowFit;
-  incoming.style.animationDuration = `${Math.max(3, state.slideshowInterval)}s`;
+  incoming.style.zIndex = 2;
+  outgoing.style.zIndex = 1;
+  const duration = effect === "drift" ? Math.max(1, state.slideshowInterval) * 1000 : effect === "fade" ? 650 : effect === "slide" ? 320 : 0;
+  incoming.style.animationDuration = `${duration}ms`;
+  outgoing.style.animationDuration = `${duration}ms`;
   const vars = driftVars();
   for (const [key, value] of Object.entries(vars)) incoming.style.setProperty(key, value);
-  incoming.classList.add(`effect-${effect}`);
-  if (effect === "slide") incoming.classList.add(direction >= 0 ? "from-right" : "from-left");
+  if (effect === "none") {
+    outgoing.classList.add("hidden");
+  } else {
+    outgoing.classList.remove("hidden");
+    incoming.classList.add(`effect-${effect}`);
+    if (effect === "fade") outgoing.classList.add("effect-fade-out");
+    if (effect === "slide") incoming.classList.add(direction >= 0 ? "from-right" : "from-left");
+    state.slideshowCleanupTimer = setTimeout(() => outgoing.classList.add("hidden"), duration + 40);
+  }
   slideshowName.textContent = item.name;
   slideshowCounter.textContent = `${state.slideshowIndex + 1} / ${state.slideshowItems.length}`;
   state.slideshowActiveLayer = state.slideshowActiveLayer === 0 ? 1 : 0;
@@ -829,6 +980,7 @@ function openSlideshowFromCurrent() {
   slideshowEffect.value = state.slideshowEffect;
   slideshowFit.value = state.slideshowFit;
   slideshowLoop.checked = state.slideshowLoop;
+  setSlideshowControlsHidden(false);
   closeModal();
   slideshow.classList.remove("hidden");
   pauseAllInline();
@@ -837,11 +989,46 @@ function openSlideshowFromCurrent() {
 }
 
 function closeSlideshow() {
+  if (isSlideshowFullscreen()) document.exitFullscreen?.();
   clearTimeout(state.slideshowTimer);
+  clearTimeout(state.slideshowCleanupTimer);
+  setSlideshowControlsHidden(false);
   slideshow.classList.add("hidden");
   slideshowImageA.removeAttribute("src");
   slideshowImageB.removeAttribute("src");
   if (state.playingEnabled) resumeVisibleInline();
+}
+
+function setSlideshowControlsHidden(hidden) {
+  state.slideshowControlsHidden = hidden;
+  slideshow.classList.toggle("controls-hidden", hidden);
+  slideshowUiShow.classList.toggle("hidden", !hidden);
+  slideshowUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
+  slideshowUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
+}
+
+function setModalControlsHidden(hidden) {
+  state.modalControlsHidden = hidden;
+  modalContent.classList.toggle("controls-hidden", hidden);
+  modalVideoUiShow.classList.toggle("hidden", !hidden);
+  modalVideoUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
+  modalVideoUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
+}
+
+function toggleModalFullscreen() {
+  if (isModalFullscreen()) {
+    document.exitFullscreen?.();
+  } else {
+    modalContent.requestFullscreen?.().catch(() => {});
+  }
+}
+
+function toggleSlideshowFullscreen() {
+  if (isSlideshowFullscreen()) {
+    document.exitFullscreen?.();
+  } else {
+    slideshow.requestFullscreen?.().catch(() => {});
+  }
 }
 
 function toggleSlideshowPlay() {
@@ -993,7 +1180,8 @@ async function saveSettingsSoft() {
 }
 
 function setColumns(cols) {
-  state.columns = Math.max(4, Math.min(9, Number(cols) || 6));
+  const next = Number(cols) || 6;
+  state.columns = COLUMN_OPTIONS.includes(next) ? next : 6;
   applyLayout();
   saveSettingsSoft();
 }
@@ -1024,15 +1212,16 @@ async function init() {
     const res = await fetch("/api/config");
     const data = await res.json();
     const cfg = data.config || {};
-    state.columns = Number(cfg.columns || 6);
+    const cfgColumns = Number(cfg.columns || 6);
+    state.columns = COLUMN_OPTIONS.includes(cfgColumns) ? cfgColumns : 6;
     state.playLimit = Number(cfg.play_limit || 24);
     state.recursive = !!cfg.recursive;
     state.rememberPath = !!cfg.remember_path;
     state.sortMode = cfg.sort_mode || "mtime_desc";
     state.immersive = !!cfg.immersive;
     state.language = cfg.language === "zh" ? "zh" : "en";
-    state.slideshowInterval = Number(cfg.slideshow_interval || 5);
-    state.slideshowEffect = ["fade", "slide", "drift", "random"].includes(cfg.slideshow_effect) ? cfg.slideshow_effect : "drift";
+    state.slideshowInterval = Math.max(1, Math.min(15, Number(cfg.slideshow_interval || 5)));
+    state.slideshowEffect = ["none", "fade", "slide", "drift", "random"].includes(cfg.slideshow_effect) ? cfg.slideshow_effect : "drift";
     state.slideshowFit = cfg.slideshow_fit === "cover" ? "cover" : "contain";
     state.slideshowLoop = cfg.slideshow_loop !== false;
     pathInput.value = cfg.last_video_dir || "";
@@ -1128,6 +1317,43 @@ modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", e => {
   if (e.target?.dataset?.close) closeModal();
 });
+modal.addEventListener("wheel", e => {
+  if (modal.classList.contains("hidden") || !state.currentModalItem) return;
+  const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  if (!delta) return;
+  e.preventDefault();
+  if (state.currentModalItem.type === "video") {
+    adjustModalVideoVolume(delta > 0 ? -0.05 : 0.05);
+    return;
+  }
+  if (state.currentModalItem.type !== "image") return;
+  const now = Date.now();
+  if (now - state.modalWheelTime < 360) return;
+  state.modalWheelTime = now;
+  showModalImage(delta > 0 ? 1 : -1);
+}, { passive: false });
+modalPrev.addEventListener("click", () => {
+  if (state.currentModalItem?.type === "image") showModalImage(-1);
+  if (state.currentModalItem?.type === "video") showModalVideo(-1);
+});
+modalNext.addEventListener("click", () => {
+  if (state.currentModalItem?.type === "image") showModalImage(1);
+  if (state.currentModalItem?.type === "video") showModalVideo(1);
+});
+modalVideoModeSeg.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-video-mode]");
+  if (!btn) return;
+  state.videoMode = btn.dataset.videoMode;
+  updateVideoModeUI();
+});
+modalFullscreen.addEventListener("click", toggleModalFullscreen);
+modalVideoUiToggle.addEventListener("click", () => setModalControlsHidden(true));
+modalVideoUiShow.addEventListener("click", () => setModalControlsHidden(false));
+modalVideo.addEventListener("ended", () => {
+  if (state.currentModalItem?.type !== "video") return;
+  if (state.videoMode === "sequence") showModalVideo(1);
+  if (state.videoMode === "random") showModalVideo(0);
+});
 modalOpenFolder.addEventListener("click", () => {
   if (state.currentModalItem) openInExplorer(state.currentModalItem.rel);
 });
@@ -1137,9 +1363,14 @@ modalSlideshow.addEventListener("click", openSlideshowFromCurrent);
 slideshowClose.addEventListener("click", closeSlideshow);
 slideshowPrev.addEventListener("click", () => showNextSlide(-1));
 slideshowNext.addEventListener("click", () => showNextSlide(1));
+slideshowSidePrev.addEventListener("click", () => showNextSlide(-1));
+slideshowSideNext.addEventListener("click", () => showNextSlide(1));
 slideshowPlay.addEventListener("click", toggleSlideshowPlay);
+slideshowFullscreen.addEventListener("click", toggleSlideshowFullscreen);
+slideshowUiToggle.addEventListener("click", () => setSlideshowControlsHidden(true));
+slideshowUiShow.addEventListener("click", () => setSlideshowControlsHidden(false));
 slideshowInterval.addEventListener("change", () => {
-  state.slideshowInterval = Number(slideshowInterval.value) || 5;
+  state.slideshowInterval = Math.max(1, Math.min(15, Number(slideshowInterval.value) || 5));
   saveSettingsSoft();
   scheduleSlideshow();
 });
@@ -1166,13 +1397,47 @@ window.addEventListener("keydown", e => {
     }
     if (e.key === "ArrowLeft") showNextSlide(-1);
     if (e.key === "ArrowRight") showNextSlide(1);
+    if (e.key.toLowerCase() === "h") setSlideshowControlsHidden(!state.slideshowControlsHidden);
     return;
+  }
+  if (!modal.classList.contains("hidden")) {
+    if (e.key === "Escape") {
+      closeModal();
+      return;
+    }
+    if (state.currentModalItem?.type === "image") {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        showModalImage(-1);
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        showModalImage(1);
+      }
+      return;
+    }
+    if (state.currentModalItem?.type === "video") {
+      if (e.key.toLowerCase() === "h") {
+        setModalControlsHidden(!state.modalControlsHidden);
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        showModalVideo(-1);
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        showModalVideo(1);
+      }
+      return;
+    }
   }
   if (e.key === "Escape") {
     if (!modal.classList.contains("hidden")) closeModal();
     else if (state.immersive) setImmersive(false);
   }
 });
+document.addEventListener("fullscreenchange", updateFullscreenLabels);
 window.addEventListener("scroll", () => scheduleUpdatePlaying(), { passive: true });
 window.addEventListener("resize", () => scheduleUpdatePlaying());
 document.addEventListener("visibilitychange", () => {

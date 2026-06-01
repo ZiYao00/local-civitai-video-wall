@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.6.1 - 2026-06-01
+
+- Changed the video preview modal header and video controls to overlay the video instead of reducing the viewing area.
+- Added hide / show controls to the video preview modal.
+- Added an exit-fullscreen state to the video fullscreen button.
+- Added native fullscreen support to the image slideshow.
+
+## 1.6.0 - 2026-06-01
+
+- Added previous / next navigation to the video preview modal.
+- Added mouse-wheel volume control while previewing a video.
+- Added video playback modes for loop one, sequential playback, and random playback.
+- Added a fullscreen button to the video preview modal.
+
+## 1.5.1 - 2026-06-01
+
+- Fixed slideshow fade transitions so the outgoing image fades out while the incoming image fades in.
+- Expanded slideshow interval choices from 1 second to 15 seconds.
+- Added a no-effect slideshow option.
+- Made slide transitions faster and less fade-heavy.
+
+## 1.5.0 - 2026-06-01
+
+- Moved remember path and scan subfolders controls next to the folder path row.
+- Added 12-column and 16-column dense grid options for faster visual browsing.
+- Added a compact dense-grid card layout for high-column browsing.
+
+## 1.4.3 - 2026-06-01
+
+- Added a restart option to `service.bat` for stopping and starting the background service from the menu.
+
+## 1.4.2 - 2026-05-31
+
+- Added previous / next navigation to the image preview modal.
+- Added arrow-key and mouse-wheel image browsing in the image preview modal.
+- Added side navigation buttons to fullscreen slideshow.
+- Removed the slideshow filename overlay and added a show / hide control button for the bottom controls.
+
+## 1.4.1 - 2026-05-31
+
+- Replaced the Windows folder picker button with the modern folder selection dialog, with the old dialog kept as a fallback.
+
 ## 1.4.0 - 2026-05-30
 
 - Added image-only fullscreen slideshow from the image modal.

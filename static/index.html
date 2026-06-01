@@ -20,6 +20,8 @@
         <input id="pathInput" class="path-input" type="text" placeholder="Enter a video folder path, for example C:\Users\YourName\Videos" spellcheck="false" />
         <button id="chooseFolderBtn" class="btn">Choose Folder</button>
         <button id="scanBtn" class="btn primary">Scan</button>
+        <label class="check"><input id="rememberPath" type="checkbox" /><span id="rememberPathLabel">Remember path</span></label>
+        <label class="check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders</span></label>
       </div>
       <div class="top-actions">
         <button id="langToggle" class="btn lang-toggle" title="Switch language">中文</button>
@@ -27,8 +29,6 @@
       </div>
     </div>
     <div id="controlPanel" class="control-panel">
-      <label class="check"><input id="rememberPath" type="checkbox" /><span id="rememberPathLabel">Remember path</span></label>
-      <label class="check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders</span></label>
       <input id="searchInput" class="search" type="search" placeholder="Search filename..." autocomplete="off" />
       <div class="seg" id="reviewFilterSeg" title="Review filter">
         <button data-review-filter="all">All</button>
@@ -67,6 +67,8 @@
         <button data-columns="7">7 cols</button>
         <button data-columns="8">8 cols</button>
         <button data-columns="9">9 cols</button>
+        <button data-columns="12">12 cols</button>
+        <button data-columns="16">16 cols</button>
       </div>
       <select id="playLimitSelect" class="select small" title="Playback limit">
         <option value="12">Play 12</option>
@@ -95,8 +97,20 @@
         <div class="modal-title"><strong id="modalName"></strong><span id="modalMeta"></span></div>
         <div class="modal-actions"><button id="modalSlideshow" class="btn hidden">Slideshow</button><button id="modalMoveReview" class="btn">Move to Review</button><button id="modalMoveTrash" class="btn">Move to Trash</button><button id="modalOpenFolder" class="btn">Show in Folder</button><button id="modalClose" class="btn ghost">Close</button></div>
       </div>
+      <button id="modalPrev" class="modal-nav modal-nav-prev hidden" aria-label="Previous item">&#8249;</button>
+      <button id="modalNext" class="modal-nav modal-nav-next hidden" aria-label="Next item">&#8250;</button>
       <video id="modalVideo" class="modal-video" controls loop autoplay playsinline></video>
       <img id="modalImage" class="modal-image hidden" alt="" />
+      <div id="modalVideoControls" class="modal-video-controls hidden">
+        <div id="modalVideoModeSeg" class="seg">
+          <button data-video-mode="loop">Loop One</button>
+          <button data-video-mode="sequence">Sequential</button>
+          <button data-video-mode="random">Random</button>
+        </div>
+        <button id="modalFullscreen" class="btn">Fullscreen</button>
+        <button id="modalVideoUiToggle" class="btn ghost">Hide UI</button>
+      </div>
+      <button id="modalVideoUiShow" class="btn modal-show-ui hidden">Show UI</button>
     </div>
   </div>
   <div id="slideshow" class="slideshow hidden" role="dialog" aria-modal="true">
@@ -104,6 +118,8 @@
       <img id="slideshowImageA" class="slideshow-image" alt="" />
       <img id="slideshowImageB" class="slideshow-image hidden" alt="" />
     </div>
+    <button id="slideshowSidePrev" class="slideshow-nav slideshow-nav-prev" aria-label="Previous image">&#8249;</button>
+    <button id="slideshowSideNext" class="slideshow-nav slideshow-nav-next" aria-label="Next image">&#8250;</button>
     <div class="slideshow-top">
       <div>
         <strong id="slideshowName"></strong>
@@ -116,12 +132,24 @@
       <button id="slideshowPlay" class="btn primary">Pause</button>
       <button id="slideshowNext" class="btn">Next</button>
       <select id="slideshowInterval" class="select small">
+        <option value="1">1s</option>
+        <option value="2">2s</option>
         <option value="3">3s</option>
+        <option value="4">4s</option>
         <option value="5">5s</option>
+        <option value="6">6s</option>
+        <option value="7">7s</option>
         <option value="8">8s</option>
+        <option value="9">9s</option>
+        <option value="10">10s</option>
+        <option value="11">11s</option>
         <option value="12">12s</option>
+        <option value="13">13s</option>
+        <option value="14">14s</option>
+        <option value="15">15s</option>
       </select>
       <select id="slideshowEffect" class="select">
+        <option value="none">None</option>
         <option value="fade">Fade</option>
         <option value="slide">Slide</option>
         <option value="drift">Drift</option>
@@ -132,7 +160,10 @@
         <option value="cover">Cover</option>
       </select>
       <label class="check"><input id="slideshowLoop" type="checkbox" checked /><span id="slideshowLoopLabel">Loop</span></label>
+      <button id="slideshowFullscreen" class="btn">Fullscreen</button>
+      <button id="slideshowUiToggle" class="btn ghost">Hide UI</button>
     </div>
+    <button id="slideshowUiShow" class="btn slideshow-show-ui hidden">Show UI</button>
   </div>
   <script src="/static/app.js"></script>
 </body>

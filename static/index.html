@@ -9,79 +9,89 @@
 <body>
   <header id="topbar" class="topbar">
     <div class="topline">
-      <div class="brand">
-        <div class="logo-dot"></div>
-        <div class="brand-text">
-          <h1>Local Video Wall</h1>
-          <p id="subInfo">Choose a video folder</p>
-        </div>
-      </div>
       <div class="path-row">
         <input id="pathInput" class="path-input" type="text" placeholder="Enter a video folder path, for example C:\Users\YourName\Videos" spellcheck="false" />
         <button id="chooseFolderBtn" class="btn">Choose Folder</button>
         <button id="scanBtn" class="btn primary">Scan</button>
-        <label class="check"><input id="rememberPath" type="checkbox" /><span id="rememberPathLabel">Remember path</span></label>
-        <label class="check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders</span></label>
+        <input id="searchInput" class="search" type="search" placeholder="Search filename..." autocomplete="off" />
+        <select id="mediaTypeSelect" class="select small" title="Media type">
+          <option value="all">All media</option>
+          <option value="video">Videos</option>
+          <option value="image">Images</option>
+        </select>
+        <select id="sortSelect" class="select" title="Sort">
+          <option value="mtime_desc">Newest modified</option>
+          <option value="mtime_asc">Oldest modified</option>
+          <option value="name_asc">Filename A-Z</option>
+          <option value="name_desc">Filename Z-A</option>
+          <option value="size_desc">Size large-small</option>
+          <option value="size_asc">Size small-large</option>
+          <option value="random">Random order</option>
+        </select>
+        <select id="columnsSelect" class="select small" title="Grid columns">
+          <option value="4">4 cols</option>
+          <option value="5">5 cols</option>
+          <option value="6">6 cols</option>
+          <option value="7">7 cols</option>
+          <option value="8">8 cols</option>
+          <option value="9">9 cols</option>
+          <option value="12">12 cols</option>
+          <option value="16">16 cols</option>
+        </select>
+        <select id="playLimitSelect" class="select small" title="Playback limit">
+          <option value="6">Play 6 at once</option>
+          <option value="8">Play 8 at once</option>
+          <option value="12">Play 12 at once</option>
+          <option value="18">Play 18 at once</option>
+          <option value="24">Play 24 at once</option>
+          <option value="30">Play 30 at once</option>
+        </select>
+        <button id="pauseBtn" class="btn ghost">Pause All</button>
+        <button id="immersiveBtn" class="btn">Immersive</button>
+        <button id="settingsToggle" class="btn icon-toggle" title="Settings" aria-label="Settings"></button>
+        <div id="settingsMenu" class="settings-menu hidden">
+        <div class="settings-section">
+          <div id="settingsInterfaceTitle" class="settings-title">Interface</div>
+          <button id="langToggle" class="btn settings-btn" title="Switch language" aria-label="Switch language"></button>
+          <button id="themeToggle" class="btn settings-btn" title="Toggle theme" aria-label="Toggle theme"></button>
+        </div>
+        <div class="settings-section">
+          <div id="settingsScanTitle" class="settings-title">Scan</div>
+          <label class="check settings-check"><input id="rememberPath" type="checkbox" /><span id="rememberPathLabel">Remember path</span></label>
+          <label class="check settings-check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders</span></label>
+        </div>
+        <div class="settings-section">
+          <div id="settingsPlaybackTitle" class="settings-title">Playback</div>
+          <label class="check settings-check"><input id="wallAutoplay" type="checkbox" checked><span id="wallAutoplayLabel">Auto play wall</span></label>
+          <label class="check settings-check"><input id="pauseWhenInactive" type="checkbox"><span id="pauseWhenInactiveLabel">Pause inactive</span></label>
+        </div>
+        <div class="settings-section">
+          <div id="settingsFiltersTitle" class="settings-title">Filters</div>
+          <div class="seg settings-seg" id="reviewFilterSeg" title="Review filter">
+            <button data-review-filter="all">All</button>
+            <button data-review-filter="favorites">Favorites</button>
+            <button data-review-filter="selected">Selected</button>
+          </div>
+          <select id="sizeFilterSelect" class="select settings-select" title="File size">
+            <option value="all">Any size</option>
+            <option value="small">Under 10 MB</option>
+            <option value="medium">10-50 MB</option>
+            <option value="large">Over 50 MB</option>
+          </select>
+          <select id="dateFilterSelect" class="select settings-select" title="Modified date">
+            <option value="all">Any date</option>
+            <option value="day">Last 24h</option>
+            <option value="week">Last 7d</option>
+            <option value="month">Last 30d</option>
+          </select>
+        </div>
+        <div class="settings-section">
+          <div id="settingsActionsTitle" class="settings-title">Actions</div>
+          <button id="exportCsvBtn" class="btn settings-btn">Export CSV</button>
+        </div>
       </div>
-      <div class="top-actions">
-        <button id="langToggle" class="btn icon-toggle" title="Switch language" aria-label="Switch language"></button>
-        <button id="themeToggle" class="btn icon-toggle" title="Toggle theme" aria-label="Toggle theme"></button>
-        <button id="buttonStyleToggle" class="btn icon-toggle" title="Toggle button style" aria-label="Toggle button style"></button>
         <button id="expandBtn" class="btn expand hidden">Expand</button>
       </div>
-    </div>
-    <div id="controlPanel" class="control-panel">
-      <input id="searchInput" class="search" type="search" placeholder="Search filename..." autocomplete="off" />
-      <div class="seg" id="reviewFilterSeg" title="Review filter">
-        <button data-review-filter="all">All</button>
-        <button data-review-filter="favorites">Favorites</button>
-        <button data-review-filter="selected">Selected</button>
-      </div>
-      <select id="sizeFilterSelect" class="select small" title="File size">
-        <option value="all">Any size</option>
-        <option value="small">Under 10 MB</option>
-        <option value="medium">10-50 MB</option>
-        <option value="large">Over 50 MB</option>
-      </select>
-      <select id="dateFilterSelect" class="select small" title="Modified date">
-        <option value="all">Any date</option>
-        <option value="day">Last 24h</option>
-        <option value="week">Last 7d</option>
-        <option value="month">Last 30d</option>
-      </select>
-      <select id="mediaTypeSelect" class="select small" title="Media type">
-        <option value="all">All media</option>
-        <option value="video">Videos</option>
-        <option value="image">Images</option>
-      </select>
-      <select id="sortSelect" class="select" title="Sort">
-        <option value="mtime_desc">Newest modified</option>
-        <option value="mtime_asc">Oldest modified</option>
-        <option value="name_asc">Filename A-Z</option>
-        <option value="name_desc">Filename Z-A</option>
-        <option value="size_desc">Size large-small</option>
-        <option value="size_asc">Size small-large</option>
-        <option value="random">Random order</option>
-      </select>
-      <div class="seg" id="columnsSeg" title="Grid columns">
-        <button data-columns="4">4 cols</button>
-        <button data-columns="5">5 cols</button>
-        <button data-columns="6">6 cols</button>
-        <button data-columns="7">7 cols</button>
-        <button data-columns="8">8 cols</button>
-        <button data-columns="9">9 cols</button>
-        <button data-columns="12">12 cols</button>
-        <button data-columns="16">16 cols</button>
-      </div>
-      <select id="playLimitSelect" class="select small" title="Playback limit">
-        <option value="12">Play 12 at once</option>
-        <option value="18">Play 18 at once</option>
-        <option value="24">Play 24 at once</option>
-        <option value="30">Play 30 at once</option>
-      </select>
-      <button id="exportCsvBtn" class="btn">Export CSV</button>
-      <button id="pauseBtn" class="btn ghost">Pause All</button>
-      <button id="immersiveBtn" class="btn ghost">Immersive</button>
     </div>
   </header>
   <main id="mainArea">
@@ -104,8 +114,8 @@
       <video id="modalVideo" class="modal-video" controls loop autoplay playsinline></video>
       <img id="modalImage" class="modal-image hidden" alt="" />
       <div id="modalHiddenActions" class="modal-hidden-actions hidden">
-        <button id="modalUiShow" class="btn modal-show-ui">Show UI</button>
         <button id="modalHiddenExitFullscreen" class="btn hidden">Exit Fullscreen</button>
+        <button id="modalUiShow" class="btn modal-show-ui">Show UI</button>
         <button id="modalHiddenClose" class="btn">Close</button>
       </div>
     </div>
@@ -161,11 +171,12 @@
       </div>
     </div>
     <div id="slideshowHiddenActions" class="slideshow-hidden-actions hidden">
-      <button id="slideshowUiShow" class="btn slideshow-show-ui">Show UI</button>
       <button id="slideshowExitFullscreen" class="btn slideshow-exit-full hidden">Exit Full</button>
+      <button id="slideshowUiShow" class="btn slideshow-show-ui">Show UI</button>
       <button id="slideshowBackToPreview" class="btn">Back</button>
     </div>
   </div>
+  <div id="subInfo" class="status-bar">Choose a video folder</div>
   <script src="/static/app.js"></script>
 </body>
 </html>

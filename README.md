@@ -90,7 +90,7 @@ Service mode:
 service.bat
 ```
 
-This opens an English menu where you can start the app in the background, stop or restart the background service, install startup, uninstall startup, open the browser, or check status.
+This opens an English menu where you can start the app in the background, stop or restart the background service, install startup, uninstall startup, open the browser, start and open the browser together, or check status. Startup uses a stable helper script under your Windows APPDATA folder instead of a temporary file.
 
 You can also run:
 

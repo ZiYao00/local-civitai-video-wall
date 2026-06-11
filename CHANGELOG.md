@@ -2,6 +2,22 @@
 
 ## 1.6.11 - 2026-06-01
 
+- Removed the top logo text to give the main toolbar more horizontal room.
+- Moved the media count / favorite / selected status into a fixed bottom-left status bar.
+- Merged the second toolbar into the main toolbar and changed grid columns from segmented buttons to a dropdown.
+- Highlighted the Choose Folder button so the main folder entry action is easier to find.
+- Reordered hidden slideshow fullscreen actions to Exit Fullscreen, Show UI, and Back.
+- Removed the obsolete button-style switch from Settings, moved Immersive to the main toolbar, and reordered hidden video fullscreen actions to Exit Fullscreen, Show UI, and Close.
+- Made clear modal, slideshow, card, and playback actions icon-first with tooltip labels while keeping text for menu settings and select controls.
+- Reorganized the top toolbar with an icon Settings menu for lower-frequency interface, scan, playback, filter, and export controls.
+- Improved `service.bat` with a stable APPDATA helper script, clearer service/startup status, Python checks, and a start-and-open option.
+- Improved responsive layout for non-maximized browser windows, including the top toolbar, control panel, modal toolbar, and slideshow toolbar.
+- Added 6 and 8 to the simultaneous wall playback limit options.
+- Added a saved Auto play wall setting for disabling inline wall playback while keeping modal playback available.
+- Added a saved Pause inactive setting for optionally pausing wall videos, modal video, and slideshow playback when the page is inactive.
+- Added scan-session media URLs so multiple browser windows can scan different folders without breaking each other's video or image playback.
+- Changed CSV export so `relative_path` contains the full local file path.
+- Removed the `modified_time` column from CSV export.
 - Fixed hidden video overlay controls so Show UI, Exit Fullscreen, and Close stay aligned in the top-right action group.
 - Fixed video loop / sequence / random icons in icon-button mode for both dark and light themes.
 - Updated English and Chinese README usage notes for image previews, slideshow controls, video preview controls, themes, and icon buttons.

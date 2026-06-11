@@ -33,6 +33,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, quote
@@ -57,6 +58,8 @@ DEFAULT_CONFIG = {
     "recursive": False,
     "columns": 6,
     "play_limit": 24,
+    "wall_autoplay": True,
+    "pause_when_inactive": False,
     "sort_mode": "mtime_desc",
     "immersive": False,
     "language": "en",
@@ -70,6 +73,7 @@ DEFAULT_CONFIG = {
 
 runtime_lock = threading.Lock()
 runtime_video_dir = ""
+runtime_scan_roots: dict[str, str] = {}
 review_lock = threading.Lock()
 
 
@@ -102,7 +106,9 @@ def load_config() -> dict:
     if not cfg.get("remember_path"):
         cfg["last_video_dir"] = ""
     cfg["columns"] = clamp_int(cfg.get("columns"), 6, 4, 9)
-    cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 12, 30)
+    cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 6, 30)
+    cfg["wall_autoplay"] = bool(cfg.get("wall_autoplay", True))
+    cfg["pause_when_inactive"] = bool(cfg.get("pause_when_inactive", False))
     cfg["language"] = normalize_language(cfg.get("language", "en"))
     cfg["slideshow_interval"] = clamp_int(cfg.get("slideshow_interval"), 5, 3, 12)
     if cfg.get("slideshow_effect") not in {"fade", "slide", "drift", "random"}:
@@ -120,7 +126,9 @@ def save_config(cfg: dict) -> dict:
     merged["recursive"] = bool(merged.get("recursive"))
     merged["immersive"] = bool(merged.get("immersive"))
     merged["columns"] = clamp_int(merged.get("columns"), 6, 4, 9)
-    merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 12, 30)
+    merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 6, 30)
+    merged["wall_autoplay"] = bool(merged.get("wall_autoplay", True))
+    merged["pause_when_inactive"] = bool(merged.get("pause_when_inactive", False))
     merged["language"] = normalize_language(merged.get("language", "en"))
     merged["theme"] = "light" if merged.get("theme") == "light" else "dark"
     merged["button_style"] = "icons" if merged.get("button_style") == "icons" else "text"
@@ -216,6 +224,24 @@ def get_current_video_dir() -> Path | None:
     return Path(p)
 
 
+def register_scan_root(path: str) -> str:
+    scan_id = uuid.uuid4().hex
+    with runtime_lock:
+        runtime_scan_roots[scan_id] = normalize_path(path)
+    return scan_id
+
+
+def get_scan_root(scan_id: str) -> Path | None:
+    scan_id = (scan_id or "").strip()
+    if not scan_id:
+        return get_current_video_dir()
+    with runtime_lock:
+        p = runtime_scan_roots.get(scan_id)
+    if not p:
+        return get_current_video_dir()
+    return Path(p)
+
+
 def set_current_video_dir(path: str):
     global runtime_video_dir
     with runtime_lock:
@@ -236,14 +262,14 @@ def safe_rel_to_path(root: Path, rel: str) -> Path:
     return full
 
 
-def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None]:
+def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None, str]:
     root = Path(normalize_path(video_dir))
     if not str(root).strip():
-        return [], "Folder path is empty. Please enter or choose a video folder first."
+        return [], "Folder path is empty. Please enter or choose a video folder first.", ""
     if not root.exists():
-        return [], f"Path does not exist: {root}"
+        return [], f"Path does not exist: {root}", ""
     if not root.is_dir():
-        return [], f"This is not a folder path: {root}"
+        return [], f"This is not a folder path: {root}", ""
 
     pattern = "**/*" if recursive else "*"
     files: list[Path] = []
@@ -257,7 +283,7 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
             except OSError:
                 continue
     except Exception as exc:
-        return [], f"Scan failed: {exc}"
+        return [], f"Scan failed: {exc}", ""
 
     try:
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -267,6 +293,7 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
     videos = []
     review_data = load_review_data()
     root_resolved = root.resolve()
+    scan_id = register_scan_root(str(root_resolved))
     for i, p in enumerate(files):
         try:
             st = p.stat()
@@ -280,7 +307,9 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
                 "type": media_type,
                 "name": p.name,
                 "rel": rel,
-                "url": "/media?path=" + quote(rel, safe=""),
+                "full_path": key,
+                "scan_id": scan_id,
+                "url": f"/media?scan_id={quote(scan_id, safe='')}&path={quote(rel, safe='')}",
                 "size_mb": round(st.st_size / 1024 / 1024, 2),
                 "mtime": int(st.st_mtime),
                 "mtime_text": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
@@ -289,7 +318,7 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
             })
         except Exception:
             continue
-    return videos, None
+    return videos, None, scan_id
 
 
 def _choose_modern_windows_folder(title: str) -> str | None:
@@ -526,8 +555,8 @@ class AppHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def serve_media(self, rel: str):
-        root = get_current_video_dir()
+    def serve_media(self, rel: str, scan_id: str = ""):
+        root = get_scan_root(scan_id)
         if root is None:
             self.send_error(404, "No video directory selected")
             return
@@ -601,8 +630,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 except BrokenPipeError:
                     break
 
-    def api_open_in_explorer(self, rel: str):
-        root = get_current_video_dir()
+    def api_open_in_explorer(self, rel: str, scan_id: str = ""):
+        root = get_scan_root(scan_id)
         if root is None:
             self.send_json({"ok": False, "error": "Please choose and scan a video folder first."}, 400)
             return
@@ -622,7 +651,7 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
 
     def api_file_action(self, payload: dict):
-        root = get_current_video_dir()
+        root = get_scan_root(str(payload.get("scan_id", "")))
         if root is None:
             self.send_json({"ok": False, "error": "Please choose and scan a media folder first."}, 400)
             return
@@ -676,14 +705,16 @@ class AppHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/open":
             rel = qs.get("path", [""])[0]
-            self.api_open_in_explorer(rel)
+            scan_id = qs.get("scan_id", [""])[0]
+            self.api_open_in_explorer(rel, scan_id)
             return
         if path == "/api/review":
             self.send_json({"ok": True, "review": load_review_data()})
             return
         if path == "/media":
             rel = qs.get("path", [""])[0]
-            self.serve_media(rel)
+            scan_id = qs.get("scan_id", [""])[0]
+            self.serve_media(rel, scan_id)
             return
         if path == "/health":
             cfg = load_config()
@@ -704,11 +735,11 @@ class AppHandler(BaseHTTPRequestHandler):
             recursive = bool(payload.get("recursive", False))
             remember_path = bool(payload.get("remember_path", False))
             columns = clamp_int(payload.get("columns"), 6, 4, 9)
-            play_limit = clamp_int(payload.get("play_limit"), 24, 12, 30)
+            play_limit = clamp_int(payload.get("play_limit"), 24, 6, 30)
             sort_mode = payload.get("sort_mode", "mtime_desc")
             immersive = bool(payload.get("immersive", False))
             language = normalize_language(payload.get("language", "en"))
-            videos, error = scan_videos(video_dir, recursive)
+            videos, error, scan_id = scan_videos(video_dir, recursive)
             if error:
                 self.send_json({"ok": False, "error": error, "videos": []}, 400)
                 return
@@ -719,6 +750,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 "recursive": recursive,
                 "columns": columns,
                 "play_limit": play_limit,
+                "wall_autoplay": bool(payload.get("wall_autoplay", DEFAULT_CONFIG["wall_autoplay"])),
+                "pause_when_inactive": bool(payload.get("pause_when_inactive", DEFAULT_CONFIG["pause_when_inactive"])),
                 "sort_mode": sort_mode,
                 "immersive": immersive,
                 "language": language,
@@ -732,6 +765,7 @@ class AppHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "ok": True,
                 "video_dir": video_dir,
+                "scan_id": scan_id,
                 "count": len(videos),
                 "recursive": recursive,
                 "videos": videos,
@@ -744,7 +778,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 "remember_path": bool(payload.get("remember_path", cfg.get("remember_path", False))),
                 "recursive": bool(payload.get("recursive", cfg.get("recursive", False))),
                 "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 4, 9),
-                "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 12, 30),
+                "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 6, 30),
+                "wall_autoplay": bool(payload.get("wall_autoplay", cfg.get("wall_autoplay", True))),
+                "pause_when_inactive": bool(payload.get("pause_when_inactive", cfg.get("pause_when_inactive", False))),
                 "sort_mode": payload.get("sort_mode", cfg.get("sort_mode", "mtime_desc")),
                 "immersive": bool(payload.get("immersive", cfg.get("immersive", False))),
                 "language": normalize_language(payload.get("language", cfg.get("language", "en"))),

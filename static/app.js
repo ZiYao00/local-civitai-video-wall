@@ -2,6 +2,8 @@ const state = {
   all: [],
   view: [],
   playingEnabled: true,
+  wallAutoplay: true,
+  pauseWhenInactive: false,
   currentModalItem: null,
   visibleVideos: new Set(),
   columns: 6,
@@ -34,6 +36,10 @@ const state = {
   slideshowWheelTime: 0,
   mediaNavTimer: null,
   scannedPath: "",
+  scanId: "",
+  pausedForInactive: false,
+  wasModalVideoPlayingBeforeHidden: false,
+  wasSlideshowPlayingBeforeHidden: false,
   updateTimer: null,
 };
 
@@ -60,6 +66,7 @@ const ICONS = {
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14"/><path d="M16 5v14"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
   scan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h3"/><path d="M17 4h3v3"/><path d="M20 17v3h-3"/><path d="M7 20H4v-3"/><path d="M7 12h10"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 7h3c4 0 5 10 9 10h5"/><path d="M16 21h5v-5"/><path d="M4 17h3c1.7 0 2.9-1.8 4-4"/><path d="M14 7c.8-.7 1.8-1 3-1h4"/></svg>',
   slideshow: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M10 8v5l4-2.5z"/></svg>',
   star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></svg>',
@@ -106,6 +113,14 @@ const i18n = {
     sortTitle: "Sort",
     columnsTitle: "Grid columns",
     playLimitTitle: "Playback limit",
+    wallAutoplay: "Auto play wall",
+    pauseWhenInactive: "Pause inactive",
+    settings: "Settings",
+    interfaceSettings: "Interface",
+    scanSettings: "Scan",
+    playbackSettings: "Playback",
+    filterSettings: "Filters",
+    actionSettings: "Actions",
     shuffle: "Shuffle",
     exportCsv: "Export CSV",
     exportEmpty: "No visible items to export.",
@@ -219,6 +234,14 @@ const i18n = {
     sortTitle: "排序",
     columnsTitle: "卡片列数",
     playLimitTitle: "同时播放上限",
+    wallAutoplay: "墙内自动播放",
+    pauseWhenInactive: "后台暂停播放",
+    settings: "设置",
+    interfaceSettings: "界面",
+    scanSettings: "扫描",
+    playbackSettings: "播放",
+    filterSettings: "筛选",
+    actionSettings: "操作",
     shuffle: "随机",
     exportCsv: "导出 CSV",
     exportEmpty: "当前没有可导出的项目。",
@@ -315,14 +338,17 @@ const dateFilterSelect = $("#dateFilterSelect");
 const mediaTypeSelect = $("#mediaTypeSelect");
 const sortSelect = $("#sortSelect");
 const playLimitSelect = $("#playLimitSelect");
-const columnsSeg = $("#columnsSeg");
+const wallAutoplay = $("#wallAutoplay");
+const pauseWhenInactive = $("#pauseWhenInactive");
+const columnsSelect = $("#columnsSelect");
 const exportCsvBtn = $("#exportCsvBtn");
 const pauseBtn = $("#pauseBtn");
 const immersiveBtn = $("#immersiveBtn");
 const expandBtn = $("#expandBtn");
+const settingsToggle = $("#settingsToggle");
+const settingsMenu = $("#settingsMenu");
 const langToggle = $("#langToggle");
 const themeToggle = $("#themeToggle");
-const buttonStyleToggle = $("#buttonStyleToggle");
 const emptyState = $("#emptyState");
 const toast = $("#toast");
 const modal = $("#modal");
@@ -394,6 +420,11 @@ function setButtonLabel(button, text, iconName, options = {}) {
   button.title = title;
   button.setAttribute("aria-label", title);
   button.classList.toggle("icon-only", iconOnly);
+  button.classList.toggle("icon-text", !!options.iconText);
+  if (options.iconText && iconName) {
+    button.innerHTML = `${iconSvg(iconName)}<span>${escapeHtml(text)}</span>`;
+    return;
+  }
   if (iconOnly && iconName) {
     button.innerHTML = iconSvg(iconName);
   } else {
@@ -417,15 +448,15 @@ function updateFullscreenLabels() {
   const tx = t();
   const fullScreenText = labelText("fullScreen", "Full Screen", "完整屏幕");
   const exitFullScreenText = labelText("exitFullScreen", "Exit Full Screen", "退出完整屏幕");
-  setButtonLabel(modalFullscreen, isModalFullscreen() ? tx.exitFullscreen : tx.fullscreen, isModalFullscreen() ? "fullscreenExit" : "fullscreen");
-  setButtonLabel(slideshowFullscreen, isSlideshowFullscreen() ? exitFullScreenText : fullScreenText, isSlideshowFullscreen() ? "fullscreenExit" : "fullscreen");
-  setButtonLabel(modalHiddenExitFullscreen, exitFullScreenText, "fullscreenExit");
+  setButtonLabel(modalFullscreen, isModalFullscreen() ? tx.exitFullscreen : tx.fullscreen, isModalFullscreen() ? "fullscreenExit" : "fullscreen", { iconOnly: true });
+  setButtonLabel(slideshowFullscreen, isSlideshowFullscreen() ? exitFullScreenText : fullScreenText, isSlideshowFullscreen() ? "fullscreenExit" : "fullscreen", { iconOnly: true });
+  setButtonLabel(modalHiddenExitFullscreen, exitFullScreenText, "fullscreenExit", { iconOnly: true });
   modalHiddenExitFullscreen.classList.toggle("hidden", !(state.modalControlsHidden && isModalFullscreen()));
-  setButtonLabel(modalHiddenClose, tx.close, "close");
+  setButtonLabel(modalHiddenClose, tx.close, "close", { iconOnly: true });
   modalHiddenActions.classList.toggle("hidden", !state.modalControlsHidden);
-  setButtonLabel(slideshowExitFullscreen, exitFullScreenText, "fullscreenExit");
+  setButtonLabel(slideshowExitFullscreen, exitFullScreenText, "fullscreenExit", { iconOnly: true });
   slideshowExitFullscreen.classList.toggle("hidden", !(state.slideshowControlsHidden && isSlideshowFullscreen()));
-  setButtonLabel(slideshowBackToPreview, labelText("backToPreview", "Back", "返回"), "back");
+  setButtonLabel(slideshowBackToPreview, labelText("backToPreview", "Back", "返回"), "back", { iconOnly: true });
   slideshowHiddenActions.classList.toggle("hidden", !state.slideshowControlsHidden);
 }
 
@@ -433,33 +464,32 @@ function applyActionButtons() {
   const tx = t();
   const switchLanguageTitle = state.language === "en" ? "Switch to Chinese" : "切换到英文";
   const themeText = state.theme === "dark" ? labelText("lightTheme", "Light Theme", "亮色主题") : labelText("darkTheme", "Dark Theme", "暗色主题");
-  const styleText = state.buttonStyle === "icons" ? labelText("textButtons", "Text Buttons", "文字按钮") : labelText("iconButtons", "Icon Buttons", "图标按钮");
-  document.body.classList.toggle("icon-buttons", state.buttonStyle === "icons");
-  setButtonLabel(langToggle, tx.langToggle, "language", { iconOnly: true, title: switchLanguageTitle });
-  setButtonLabel(themeToggle, themeText, state.theme === "dark" ? "sun" : "moon", { iconOnly: true });
-  setButtonLabel(buttonStyleToggle, styleText, state.buttonStyle === "icons" ? "textMode" : "iconMode", { iconOnly: true });
-  setButtonLabel(chooseFolderBtn, tx.chooseFolder, "folder");
-  setButtonLabel(scanBtn, tx.scan, "scan");
+  document.body.classList.add("icon-buttons");
+  setButtonLabel(settingsToggle, tx.settings, "settings", { iconOnly: true });
+  setButtonLabel(langToggle, tx.langToggle, "language", { iconOnly: false, iconText: true, title: switchLanguageTitle });
+  setButtonLabel(themeToggle, themeText, state.theme === "dark" ? "sun" : "moon", { iconOnly: false, iconText: true });
+  setButtonLabel(chooseFolderBtn, tx.chooseFolder, "folder", { iconOnly: true });
+  setButtonLabel(scanBtn, tx.scan, "scan", { iconOnly: true });
   setButtonLabel(expandBtn, tx.expand, "fullscreen");
-  setButtonLabel(exportCsvBtn, tx.exportCsv, "download");
-  setButtonLabel(pauseBtn, state.playingEnabled ? tx.pauseAll : tx.resume, state.playingEnabled ? "pause" : "play");
-  setButtonLabel(immersiveBtn, state.immersive ? tx.exitImmersive : tx.immersive, state.immersive ? "close" : "fullscreen");
-  setButtonLabel(modalSlideshow, labelText("slideshowFullscreen", "Slideshow (Fullscreen)", "幻灯片（全屏）"), "slideshow");
-  setButtonLabel(modalMoveReview, tx.moveReview, "star");
-  setButtonLabel(modalMoveTrash, tx.moveTrash, "trash");
-  setButtonLabel(modalOpenFolder, tx.showInFolder, "folder");
-  setButtonLabel(modalImageUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff");
-  setButtonLabel(modalVideoUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff");
-  setButtonLabel(modalUiShow, labelText("showUi", "Show UI", "显示控制"), "eye");
-  setButtonLabel(modalClose, tx.close, "close");
+  setButtonLabel(exportCsvBtn, tx.exportCsv, "download", { iconOnly: false, iconText: true });
+  setButtonLabel(pauseBtn, state.playingEnabled ? tx.pauseAll : tx.resume, state.playingEnabled ? "pause" : "play", { iconOnly: true });
+  setButtonLabel(immersiveBtn, state.immersive ? tx.exitImmersive : tx.immersive, state.immersive ? "close" : "fullscreen", { iconOnly: true });
+  setButtonLabel(modalSlideshow, labelText("slideshowFullscreen", "Slideshow (Fullscreen)", "幻灯片（全屏）"), "slideshow", { iconOnly: true });
+  setButtonLabel(modalMoveReview, tx.moveReview, "star", { iconOnly: true });
+  setButtonLabel(modalMoveTrash, tx.moveTrash, "trash", { iconOnly: true });
+  setButtonLabel(modalOpenFolder, tx.showInFolder, "folder", { iconOnly: true });
+  setButtonLabel(modalImageUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff", { iconOnly: true });
+  setButtonLabel(modalVideoUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff", { iconOnly: true });
+  setButtonLabel(modalUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
+  setButtonLabel(modalClose, tx.close, "close", { iconOnly: true });
   updateVideoModeUI();
-  setButtonLabel(slideshowPrev, tx.prev, "left");
-  setButtonLabel(slideshowNext, tx.next, "right");
-  setButtonLabel(slideshowPlay, state.slideshowPlaying ? tx.pause : tx.play, state.slideshowPlaying ? "pause" : "play");
-  setButtonLabel(slideshowUiToggle, compactText("hideUi", "Hide"), "eyeOff");
-  setButtonLabel(slideshowUiShow, labelText("showUi", "Show UI", "显示控制"), "eye");
-  setButtonLabel(slideshowClose, tx.close, "close");
-  document.querySelectorAll(".tiny-btn").forEach(btn => setButtonLabel(btn, tx.location, "folder"));
+  setButtonLabel(slideshowPrev, tx.prev, "left", { iconOnly: true });
+  setButtonLabel(slideshowNext, tx.next, "right", { iconOnly: true });
+  setButtonLabel(slideshowPlay, state.slideshowPlaying ? tx.pause : tx.play, state.slideshowPlaying ? "pause" : "play", { iconOnly: true });
+  setButtonLabel(slideshowUiToggle, compactText("hideUi", "Hide"), "eyeOff", { iconOnly: true });
+  setButtonLabel(slideshowUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
+  setButtonLabel(slideshowClose, tx.close, "close", { iconOnly: true });
+  document.querySelectorAll(".tiny-btn").forEach(btn => setButtonLabel(btn, tx.location, "folder", { iconOnly: true }));
   updateFullscreenLabels();
 }
 
@@ -487,7 +517,7 @@ function showToast(message, ms = 2600) {
 function setBusy(isBusy) {
   scanBtn.disabled = isBusy;
   chooseFolderBtn.disabled = isBusy;
-  setButtonLabel(scanBtn, isBusy ? t().scanning : t().scan, "scan");
+  setButtonLabel(scanBtn, isBusy ? t().scanning : t().scan, "scan", { iconOnly: true });
 }
 
 function applyLanguage() {
@@ -520,8 +550,15 @@ function applyLanguage() {
   mediaTypeSelect.querySelector('[value="video"]').textContent = tx.videosOnly;
   mediaTypeSelect.querySelector('[value="image"]').textContent = tx.imagesOnly;
   sortSelect.title = tx.sortTitle;
-  columnsSeg.title = tx.columnsTitle;
+  columnsSelect.title = tx.columnsTitle;
   playLimitSelect.title = tx.playLimitTitle;
+  $("#wallAutoplayLabel").textContent = tx.wallAutoplay;
+  $("#pauseWhenInactiveLabel").textContent = tx.pauseWhenInactive;
+  $("#settingsInterfaceTitle").textContent = tx.interfaceSettings;
+  $("#settingsScanTitle").textContent = tx.scanSettings;
+  $("#settingsPlaybackTitle").textContent = tx.playbackSettings;
+  $("#settingsFiltersTitle").textContent = tx.filterSettings;
+  $("#settingsActionsTitle").textContent = tx.actionSettings;
   exportCsvBtn.textContent = tx.exportCsv;
   pauseBtn.textContent = state.playingEnabled ? tx.pauseAll : tx.resume;
   immersiveBtn.textContent = state.immersive ? tx.exitImmersive : tx.immersive;
@@ -557,8 +594,8 @@ function applyLanguage() {
   for (const opt of sortSelect.options) {
     opt.textContent = tx.sortOptions[opt.value] || opt.textContent;
   }
-  columnsSeg.querySelectorAll("button[data-columns]").forEach(btn => {
-    btn.textContent = tx.colLabel(btn.dataset.columns);
+  [...columnsSelect.options].forEach(opt => {
+    opt.textContent = tx.colLabel(opt.value);
   });
   [...playLimitSelect.options].forEach(opt => {
     opt.textContent = tx.playLabel(opt.value);
@@ -579,12 +616,19 @@ function applyLayout() {
   document.documentElement.style.setProperty("--card-w", `${width}px`);
   document.documentElement.style.setProperty("--gap", `${gap}px`);
   document.body.classList.toggle("dense-grid", cols >= 12);
-  columnsSeg.querySelectorAll("button").forEach(btn => {
-    btn.classList.toggle("active", Number(btn.dataset.columns) === cols);
-  });
+  columnsSelect.value = String(cols);
   playLimitSelect.value = String(state.playLimit);
   updateSubInfo();
   scheduleUpdatePlaying();
+}
+
+function setSettingsMenuOpen(open) {
+  settingsMenu.classList.toggle("hidden", !open);
+  settingsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function toggleSettingsMenu() {
+  setSettingsMenuOpen(settingsMenu.classList.contains("hidden"));
 }
 
 function updateSubInfo() {
@@ -686,7 +730,7 @@ function renderGrid() {
     card.querySelector(".video-wrap").addEventListener("click", () => openModal(item));
     card.querySelector(".tiny-btn").addEventListener("click", e => {
       e.stopPropagation();
-      openInExplorer(item.rel);
+      openInExplorer(item);
     });
     card.querySelectorAll(".review-btn").forEach(btn => {
       btn.addEventListener("click", e => {
@@ -710,11 +754,11 @@ function updateReviewButtons() {
     const favoriteBtn = card.querySelector('[data-review-field="favorite"]');
     const selectedBtn = card.querySelector('[data-review-field="selected"]');
     if (favoriteBtn) {
-      setButtonLabel(favoriteBtn, item.favorite ? tx.favorited : tx.favorite, "star");
+      setButtonLabel(favoriteBtn, item.favorite ? tx.favorited : tx.favorite, "star", { iconOnly: true });
       favoriteBtn.classList.toggle("active", !!item.favorite);
     }
     if (selectedBtn) {
-      setButtonLabel(selectedBtn, item.selected ? tx.selectedMarked : tx.markSelected, "check");
+      setButtonLabel(selectedBtn, item.selected ? tx.selectedMarked : tx.markSelected, "check", { iconOnly: true });
       selectedBtn.classList.toggle("active", !!item.selected);
     }
   });
@@ -760,13 +804,12 @@ function exportCsv() {
     showToast(t().exportEmpty);
     return;
   }
-  const headers = ["name", "type", "relative_path", "size_mb", "modified_time", "favorite", "selected"];
+  const headers = ["name", "type", "relative_path", "size_mb", "favorite", "selected"];
   const rows = state.view.map(item => [
     item.name,
     item.type || "video",
-    item.rel,
+    item.full_path || item.key || item.rel,
     Number(item.size_mb).toFixed(2),
-    item.mtime_text,
     item.favorite ? "yes" : "no",
     item.selected ? "yes" : "no",
   ]);
@@ -868,7 +911,13 @@ function updatePlaying() {
   const selectedSet = new Set(selected);
   for (const video of videos) {
     const card = video.closest(".video-card");
-    if (!state.playingEnabled || !modal.classList.contains("hidden")) {
+    if (!state.wallAutoplay && state.playingEnabled && modal.classList.contains("hidden")) {
+      ensureSrc(video);
+      video.pause();
+      card?.classList.remove("paused-by-limit");
+      continue;
+    }
+    if (!state.playingEnabled || (state.pauseWhenInactive && document.hidden) || !modal.classList.contains("hidden")) {
       video.pause();
       card?.classList.remove("paused-by-limit");
       continue;
@@ -898,6 +947,38 @@ function resumeVisibleInline() {
   scheduleUpdatePlaying();
 }
 
+function pauseActiveViewForInactive() {
+  if (state.pausedForInactive) return;
+  state.pausedForInactive = true;
+  state.wasModalVideoPlayingBeforeHidden = !modal.classList.contains("hidden") && !modalVideo.paused;
+  state.wasSlideshowPlayingBeforeHidden = !slideshow.classList.contains("hidden") && state.slideshowPlaying;
+  pauseAllInline();
+  modalVideo.pause();
+  if (state.wasSlideshowPlayingBeforeHidden) {
+    state.slideshowPlaying = false;
+    clearTimeout(state.slideshowTimer);
+    applyActionButtons();
+  }
+}
+
+function resumeActiveViewAfterInactive() {
+  if (!state.pausedForInactive) return;
+  state.pausedForInactive = false;
+  if (state.wallAutoplay && state.playingEnabled && modal.classList.contains("hidden")) {
+    resumeVisibleInline();
+  }
+  if (state.wasModalVideoPlayingBeforeHidden && !modal.classList.contains("hidden")) {
+    playModalVideoSoon();
+  }
+  if (state.wasSlideshowPlayingBeforeHidden && !slideshow.classList.contains("hidden")) {
+    state.slideshowPlaying = true;
+    applyActionButtons();
+    scheduleSlideshow();
+  }
+  state.wasModalVideoPlayingBeforeHidden = false;
+  state.wasSlideshowPlayingBeforeHidden = false;
+}
+
 function updateVideoModeUI() {
   const tx = t();
   const modeLabels = {
@@ -907,7 +988,7 @@ function updateVideoModeUI() {
   };
   modalVideoModeSeg.querySelectorAll("button[data-video-mode]").forEach(btn => {
     const [label, icon] = modeLabels[btn.dataset.videoMode] || [btn.textContent, "play"];
-    setButtonLabel(btn, label, icon);
+    setButtonLabel(btn, label, icon, { iconOnly: true });
     btn.classList.toggle("active", btn.dataset.videoMode === state.videoMode);
   });
   modalVideo.loop = state.videoMode === "loop";
@@ -1211,9 +1292,13 @@ function toggleSlideshowPlay() {
   scheduleSlideshow();
 }
 
-async function openInExplorer(rel) {
+async function openInExplorer(item) {
+  const rel = typeof item === "string" ? item : item?.rel;
+  const scanId = typeof item === "string" ? "" : (item?.scan_id || state.scanId || "");
   try {
-    const res = await fetch("/api/open?path=" + encodeURIComponent(rel));
+    const params = new URLSearchParams({ path: rel || "" });
+    if (scanId) params.set("scan_id", scanId);
+    const res = await fetch("/api/open?" + params.toString());
     const data = await res.json();
     if (!data.ok) showToast(data.error || t().openFail);
   } catch {
@@ -1230,7 +1315,7 @@ async function runFileAction(action) {
     const res = await fetch("/api/file-action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, rel: item.rel, confirm: true }),
+      body: JSON.stringify({ action, rel: item.rel, scan_id: item.scan_id || state.scanId || "", confirm: true }),
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || t().fileActionFail);
@@ -1248,7 +1333,7 @@ async function runFileAction(action) {
 async function chooseFolder() {
   showToast(t().chooseOpening, 3500);
   chooseFolderBtn.disabled = true;
-  setButtonLabel(chooseFolderBtn, t().choosing, "folder");
+  setButtonLabel(chooseFolderBtn, t().choosing, "folder", { iconOnly: true });
   try {
     const res = await fetch("/api/choose-folder");
     const data = await res.json();
@@ -1262,7 +1347,7 @@ async function chooseFolder() {
     showToast(t().chooseFail);
   } finally {
     chooseFolderBtn.disabled = false;
-    setButtonLabel(chooseFolderBtn, t().chooseFolder, "folder");
+    setButtonLabel(chooseFolderBtn, t().chooseFolder, "folder", { iconOnly: true });
   }
 }
 
@@ -1285,6 +1370,8 @@ async function scanNow() {
       recursive: recursiveScan.checked,
       columns: state.columns,
       play_limit: state.playLimit,
+      wall_autoplay: state.wallAutoplay,
+      pause_when_inactive: state.pauseWhenInactive,
       sort_mode: sortSelect.value,
       immersive: state.immersive,
       language: state.language,
@@ -1309,6 +1396,7 @@ async function scanNow() {
     }
     state.all = data.videos || [];
     state.scannedPath = data.video_dir || videoDir;
+    state.scanId = data.scan_id || "";
     state.recursive = !!data.recursive;
     state.rememberPath = rememberPath.checked;
     state.sizeFilter = "all";
@@ -1343,6 +1431,8 @@ async function saveSettingsSoft() {
         recursive: recursiveScan.checked,
         columns: state.columns,
         play_limit: state.playLimit,
+        wall_autoplay: state.wallAutoplay,
+        pause_when_inactive: state.pauseWhenInactive,
         sort_mode: sortSelect.value,
         immersive: state.immersive,
         language: state.language,
@@ -1365,9 +1455,31 @@ function setColumns(cols) {
 }
 
 function setPlayLimit(limit) {
-  state.playLimit = Math.max(12, Math.min(30, Number(limit) || 24));
+  state.playLimit = Math.max(6, Math.min(30, Number(limit) || 24));
   applyLayout();
   saveSettingsSoft();
+}
+
+function setWallAutoplay(enabled, save = true) {
+  state.wallAutoplay = !!enabled;
+  wallAutoplay.checked = state.wallAutoplay;
+  if (state.wallAutoplay && state.playingEnabled) {
+    resumeVisibleInline();
+  } else {
+    pauseAllInline();
+  }
+  if (save) saveSettingsSoft();
+}
+
+function setPauseWhenInactive(enabled, save = true) {
+  state.pauseWhenInactive = !!enabled;
+  pauseWhenInactive.checked = state.pauseWhenInactive;
+  if (state.pauseWhenInactive && document.hidden) {
+    pauseActiveViewForInactive();
+  } else if (!document.hidden) {
+    resumeActiveViewAfterInactive();
+  }
+  if (save) saveSettingsSoft();
 }
 
 function setImmersive(enabled) {
@@ -1409,6 +1521,9 @@ async function init() {
     const cfgColumns = Number(cfg.columns || 6);
     state.columns = COLUMN_OPTIONS.includes(cfgColumns) ? cfgColumns : 6;
     state.playLimit = Number(cfg.play_limit || 24);
+    state.playLimit = Math.max(6, Math.min(30, state.playLimit));
+    state.wallAutoplay = cfg.wall_autoplay !== false;
+    state.pauseWhenInactive = cfg.pause_when_inactive === true;
     state.recursive = !!cfg.recursive;
     state.rememberPath = !!cfg.remember_path;
     state.sortMode = cfg.sort_mode || "mtime_desc";
@@ -1429,6 +1544,8 @@ async function init() {
     pathInput.value = cfg.last_video_dir || "";
     rememberPath.checked = state.rememberPath;
     recursiveScan.checked = state.recursive;
+    wallAutoplay.checked = state.wallAutoplay;
+    pauseWhenInactive.checked = state.pauseWhenInactive;
     sortSelect.value = state.sortMode;
     playLimitSelect.value = String(state.playLimit);
     slideshowInterval.value = String(state.slideshowInterval);
@@ -1453,6 +1570,12 @@ searchInput.addEventListener("input", () => {
 sortSelect.addEventListener("change", applyFilters);
 chooseFolderBtn.addEventListener("click", chooseFolder);
 scanBtn.addEventListener("click", scanNow);
+settingsToggle.addEventListener("click", e => {
+  e.stopPropagation();
+  toggleSettingsMenu();
+});
+settingsMenu.addEventListener("click", e => e.stopPropagation());
+document.addEventListener("click", () => setSettingsMenuOpen(false));
 pathInput.addEventListener("keydown", e => {
   if (e.key === "Enter") scanNow();
 });
@@ -1465,11 +1588,10 @@ reviewFilterSeg.addEventListener("click", e => {
   updateReviewFilterUI();
   applyFilters();
 });
-columnsSeg.addEventListener("click", e => {
-  const btn = e.target.closest("button[data-columns]");
-  if (btn) setColumns(btn.dataset.columns);
-});
+columnsSelect.addEventListener("change", () => setColumns(columnsSelect.value));
 playLimitSelect.addEventListener("change", () => setPlayLimit(playLimitSelect.value));
+wallAutoplay.addEventListener("change", () => setWallAutoplay(wallAutoplay.checked));
+pauseWhenInactive.addEventListener("change", () => setPauseWhenInactive(pauseWhenInactive.checked));
 sizeFilterSelect.addEventListener("change", () => {
   state.sizeFilter = sizeFilterSelect.value;
   applyFilters();
@@ -1498,7 +1620,6 @@ immersiveBtn.addEventListener("click", () => setImmersive(true));
 expandBtn.addEventListener("click", () => setImmersive(false));
 langToggle.addEventListener("click", () => setLanguage(state.language === "en" ? "zh" : "en"));
 themeToggle.addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
-buttonStyleToggle.addEventListener("click", () => setButtonStyle(state.buttonStyle === "icons" ? "text" : "icons"));
 modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", e => {
   if (e.target?.dataset?.close) closeModal();
@@ -1547,7 +1668,7 @@ modalVideo.addEventListener("ended", () => {
   if (state.videoMode === "random") showModalVideo(0);
 });
 modalOpenFolder.addEventListener("click", () => {
-  if (state.currentModalItem) openInExplorer(state.currentModalItem.rel);
+  if (state.currentModalItem) openInExplorer(state.currentModalItem);
 });
 modalMoveReview.addEventListener("click", () => runFileAction("move_review"));
 modalMoveTrash.addEventListener("click", () => runFileAction("move_trash"));
@@ -1597,6 +1718,10 @@ slideshowLoop.addEventListener("change", () => {
   saveSettingsSoft();
 });
 window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !settingsMenu.classList.contains("hidden")) {
+    setSettingsMenuOpen(false);
+    return;
+  }
   if (!slideshow.classList.contains("hidden")) {
     if (e.key === "Escape") closeSlideshow();
     if (e.key === " ") {
@@ -1649,11 +1774,17 @@ document.addEventListener("fullscreenchange", updateFullscreenLabels);
 window.addEventListener("scroll", () => scheduleUpdatePlaying(), { passive: true });
 window.addEventListener("resize", () => scheduleUpdatePlaying());
 document.addEventListener("visibilitychange", () => {
+  if (!state.pauseWhenInactive) return;
   if (document.hidden) {
-    pauseAllInline();
-    modalVideo.pause();
-  } else if (state.playingEnabled && modal.classList.contains("hidden")) {
-    resumeVisibleInline();
+    pauseActiveViewForInactive();
+  } else {
+    resumeActiveViewAfterInactive();
   }
+});
+window.addEventListener("blur", () => {
+  if (state.pauseWhenInactive) pauseActiveViewForInactive();
+});
+window.addEventListener("focus", () => {
+  if (state.pauseWhenInactive && !document.hidden) resumeActiveViewAfterInactive();
 });
 init();

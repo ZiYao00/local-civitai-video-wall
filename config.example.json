@@ -4,6 +4,8 @@
   "recursive": false,
   "columns": 6,
   "play_limit": 24,
+  "wall_autoplay": true,
+  "pause_when_inactive": false,
   "sort_mode": "mtime_desc",
   "immersive": false,
   "language": "en",

@@ -6,6 +6,9 @@
 - Added a saved confirmation setting for Recycle Bin moves, including a "Don't ask again" option in the confirmation dialog.
 - Added Delete-key support for moving the current modal or slideshow item to the Windows Recycle Bin.
 - Added address-bar folder autocomplete for typed paths such as `D:\3`, limited to one parent directory level and 20 folder suggestions.
+- Added lightweight performance stats for scan time, render time, current page items, and loaded media.
+- Improved media resource cleanup during pagination, rescans, modal close, and slideshow close.
+- Added in-memory caching and a refresh action for the folder sidebar tree.
 
 - Added per-item removal controls for favorite paths and path history while retaining the clear-all history action.
 - Added a saved setting for allowing wall previews of videos over 500 MB.

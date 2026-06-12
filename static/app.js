@@ -46,6 +46,9 @@ const state = {
   scanId: "",
   pathHistory: [],
   pathFavorites: [],
+  perf: { scanMs: 0, renderMs: 0, pageItems: 0, loadedMedia: 0 },
+  loadedStatTimer: null,
+  folderCache: new Map(),
   gridPage: 0,
   folderRootsLoaded: false,
   pausedForInactive: false,
@@ -153,6 +156,7 @@ const i18n = {
     folderDrives: "Drives",
     folderEmpty: "No saved paths.",
     folderLoadFail: "Could not load folders.",
+    folderRefresh: "Refresh",
     addFavorite: "Add favorite",
     removeFavorite: "Remove favorite",
     pathHistory: "Path history",
@@ -245,6 +249,7 @@ const i18n = {
     confirmReview: "Move this file to _video_wall_review? The original file path will change.",
     fileActionDone: "File moved. The current list was updated.",
     fileActionFail: "File action failed.",
+    perfInfo: stats => `scan ${stats.scanMs}ms · render ${stats.renderMs}ms · page ${stats.pageItems} · loaded ${stats.loadedMedia}`,
     scanDone: (n, excluded = 0) => excluded > 0
       ? `Scan complete: ${n} media items · ${excluded} excluded`
       : `Scan complete: ${n} media items`,
@@ -321,6 +326,7 @@ const i18n = {
     folderDrives: "磁盘",
     folderEmpty: "暂无保存路径。",
     folderLoadFail: "文件夹加载失败。",
+    folderRefresh: "刷新",
     addFavorite: "添加收藏",
     removeFavorite: "取消收藏",
     pathHistory: "路径历史",
@@ -413,6 +419,7 @@ const i18n = {
     confirmReview: "要把这个文件移动到 _video_wall_review 吗？原文件路径会变化。",
     fileActionDone: "文件已移动，当前列表已更新。",
     fileActionFail: "文件操作失败。",
+    perfInfo: stats => `扫描 ${stats.scanMs}ms · 渲染 ${stats.renderMs}ms · 本页 ${stats.pageItems} · 已加载 ${stats.loadedMedia}`,
     scanDone: (n, excluded = 0) => excluded > 0
       ? `扫描完成：显示 ${n} 项 · 已排除 ${excluded} 项`
       : `扫描完成：${n} 个媒体文件`,
@@ -444,8 +451,10 @@ const favoritePathBtn = $("#favoritePathBtn");
 const pathHistoryToggle = $("#pathHistoryToggle");
 const pathHistoryMenu = $("#pathHistoryMenu");
 const pathSuggestMenu = $("#pathSuggestMenu");
+const pathCombo = pathInput.closest(".path-combo");
 const folderPanel = $("#folderPanel");
 const folderPanelClose = $("#folderPanelClose");
+const folderPanelRefresh = $("#folderPanelRefresh");
 const folderFavorites = $("#folderFavorites");
 const folderTree = $("#folderTree");
 const chooseFolderBtn = $("#chooseFolderBtn");
@@ -688,6 +697,7 @@ function applyLanguage() {
   $("#folderFavoritesTitle").textContent = tx.folderFavorites;
   $("#folderDrivesTitle").textContent = tx.folderDrives;
   folderPanelClose.textContent = tx.close;
+  folderPanelRefresh.textContent = tx.folderRefresh;
   chooseFolderBtn.textContent = tx.chooseFolder;
   scanBtn.textContent = tx.scan;
   expandBtn.textContent = tx.expand;
@@ -946,7 +956,8 @@ function updateSubInfo() {
   const pages = gridPageCount();
   const pageText = pages > 1 ? ` · ${t().pageStatus(state.gridPage + 1, pages)}` : "";
   const excludedText = state.lastExcludedCount > 0 ? ` · ${state.lastExcludedCount} ${state.language === "zh" ? "项已排除" : "excluded"}` : "";
-  subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items}${pageText} · ${tx.favorites} ${favCount} · ${tx.selected} ${selectedCount}${excludedText}`;
+  const perfText = state.perf ? ` · ${tx.perfInfo(state.perf)}` : "";
+  subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items}${pageText} · ${tx.favorites} ${favCount} · ${tx.selected} ${selectedCount}${excludedText}${perfText}`;
 }
 
 function sortItems(items, mode) {
@@ -1015,11 +1026,15 @@ function setGridPage(page) {
 }
 
 function renderGrid() {
+  const renderStart = performance.now();
   destroyObservers();
+  releaseGridMedia();
   grid.innerHTML = "";
-  state.visibleVideos.clear();
   emptyState.classList.add("hidden");
   if (state.view.length === 0) {
+    state.perf.pageItems = 0;
+    state.perf.loadedMedia = 0;
+    state.perf.renderMs = Math.round(performance.now() - renderStart);
     updateGridPager();
     updateSubInfo();
     return;
@@ -1027,6 +1042,7 @@ function renderGrid() {
   const frag = document.createDocumentFragment();
   const pageStart = state.gridPage * GRID_PAGE_SIZE;
   const pageItems = state.view.slice(pageStart, pageStart + GRID_PAGE_SIZE);
+  state.perf.pageItems = pageItems.length;
   for (const item of pageItems) {
     const card = document.createElement("article");
     card.className = "video-card";
@@ -1076,6 +1092,8 @@ function renderGrid() {
   updateReviewButtons();
   setupObservers();
   updateGridPager();
+  state.perf.renderMs = Math.round(performance.now() - renderStart);
+  state.perf.loadedMedia = countLoadedMedia();
   updateSubInfo();
 }
 
@@ -1166,6 +1184,23 @@ let playObserver = null;
 function destroyObservers() {
   if (loadObserver) loadObserver.disconnect();
   if (playObserver) playObserver.disconnect();
+  loadObserver = null;
+  playObserver = null;
+}
+
+function releaseMediaElement(media) {
+  if (!media) return;
+  if (media.tagName === "VIDEO") media.pause();
+  if (media.getAttribute("src")) {
+    media.removeAttribute("src");
+    if (media.tagName === "VIDEO") media.load();
+  }
+}
+
+function releaseGridMedia() {
+  document.querySelectorAll(".video-wrap video, .video-wrap img.media-image").forEach(releaseMediaElement);
+  state.visibleVideos.clear();
+  state.perf.loadedMedia = 0;
 }
 
 function setupObservers() {
@@ -1204,19 +1239,39 @@ function setupObservers() {
   scheduleUpdatePlaying();
 }
 
+function countLoadedMedia() {
+  return document.querySelectorAll(".video-wrap video[src], .video-wrap img.media-image[src]").length;
+}
+
+function syncLoadedMediaStat() {
+  if (state.loadedStatTimer) return;
+  state.loadedStatTimer = requestAnimationFrame(() => {
+    state.loadedStatTimer = null;
+    state.perf.loadedMedia = countLoadedMedia();
+    updateSubInfo();
+  });
+}
+
+function syncLoadedMediaStatNow() {
+  if (state.loadedStatTimer) {
+    cancelAnimationFrame(state.loadedStatTimer);
+    state.loadedStatTimer = null;
+  }
+  state.perf.loadedMedia = countLoadedMedia();
+  updateSubInfo();
+}
+
 function ensureSrc(media) {
   if (!media.getAttribute("src") && media.dataset.src) {
     media.src = media.dataset.src;
     if (media.tagName === "VIDEO") media.load();
+    syncLoadedMediaStat();
   }
 }
 
 function pauseAndRelease(media) {
-  if (media.tagName === "VIDEO") media.pause();
-  if (media.getAttribute("src")) {
-    media.removeAttribute("src");
-    if (media.tagName === "VIDEO") media.load();
-  }
+  releaseMediaElement(media);
+  syncLoadedMediaStat();
 }
 
 function isActuallyVisible(el) {
@@ -1369,10 +1424,8 @@ function openModal(item) {
 function closeModal() {
   if (isModalFullscreen()) document.exitFullscreen?.();
   clearTimeout(state.mediaNavTimer);
-  modalVideo.pause();
-  modalVideo.removeAttribute("src");
-  modalVideo.load();
-  modalImage.removeAttribute("src");
+  releaseMediaElement(modalVideo);
+  releaseMediaElement(modalImage);
   modalSlideshow.classList.add("hidden");
   modalImageUiToggle.classList.add("hidden");
   modalVideoControls.classList.add("hidden");
@@ -1557,8 +1610,8 @@ function closeSlideshow(options = {}) {
   slideshowExitFullscreen.classList.add("hidden");
   slideshow.classList.remove("nav-active");
   slideshow.classList.add("hidden");
-  slideshowImageA.removeAttribute("src");
-  slideshowImageB.removeAttribute("src");
+  releaseMediaElement(slideshowImageA);
+  releaseMediaElement(slideshowImageB);
   if (shouldResumeInline && state.playingEnabled) resumeVisibleInline();
 }
 
@@ -1805,8 +1858,17 @@ function updateFolderStars() {
   updateFavoritePathButton();
 }
 
+function positionPathDropdown(menu) {
+  const rect = pathCombo.getBoundingClientRect();
+  const gutter = 12;
+  menu.style.top = `${Math.round(rect.bottom + 8)}px`;
+  menu.style.left = `${Math.round(Math.max(gutter, rect.left))}px`;
+  menu.style.width = `${Math.round(Math.min(rect.width, window.innerWidth - gutter * 2))}px`;
+}
+
 function setPathSuggestMenuOpen(open) {
   if (open) pathHistoryMenu.classList.add("hidden");
+  if (open) positionPathDropdown(pathSuggestMenu);
   pathSuggestMenu.classList.toggle("hidden", !open);
 }
 
@@ -1928,6 +1990,7 @@ function renderHistoryMenu() {
 function setHistoryMenuOpen(open) {
   if (open) closePathSuggestions();
   if (open) renderHistoryMenu();
+  if (open) positionPathDropdown(pathHistoryMenu);
   pathHistoryMenu.classList.toggle("hidden", !open);
 }
 
@@ -1954,7 +2017,11 @@ function closeFolderPanel() {
   document.body.classList.remove("sidebar-open");
 }
 
-async function loadFolderRoots() {
+async function loadFolderRoots(force = false) {
+  if (force) {
+    state.folderRootsLoaded = false;
+    state.folderCache.clear();
+  }
   folderTree.innerHTML = `<div class="folder-empty">${t().scanProgress}</div>`;
   try {
     const res = await fetch("/api/fs/roots");
@@ -1971,6 +2038,17 @@ async function loadFolderRoots() {
   }
 }
 
+function renderFolderChildren(container, folders) {
+  container.innerHTML = "";
+  if (!folders.length) {
+    container.innerHTML = `<div class="folder-empty">${t().folderEmpty}</div>`;
+    return;
+  }
+  for (const folder of folders) {
+    container.appendChild(createPathRow(folder.name, folder.path, { expandable: true }));
+  }
+}
+
 async function toggleFolderNode(row, path, expandButton) {
   const children = row.querySelector(":scope > .folder-children");
   if (!children) return;
@@ -1982,19 +2060,20 @@ async function toggleFolderNode(row, path, expandButton) {
   expandButton.textContent = "...";
   children.classList.remove("hidden");
   children.innerHTML = `<div class="folder-empty">${t().scanProgress}</div>`;
+  const cacheKey = pathKey(path);
+  if (state.folderCache.has(cacheKey)) {
+    renderFolderChildren(children, state.folderCache.get(cacheKey));
+    children.dataset.loaded = "1";
+    expandButton.textContent = "v";
+    return;
+  }
   try {
     const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || t().folderLoadFail);
-    children.innerHTML = "";
     const folders = data.folders || [];
-    if (!folders.length) {
-      children.innerHTML = `<div class="folder-empty">${t().folderEmpty}</div>`;
-    } else {
-      for (const folder of folders) {
-        children.appendChild(createPathRow(folder.name, folder.path, { expandable: true }));
-      }
-    }
+    state.folderCache.set(cacheKey, folders);
+    renderFolderChildren(children, folders);
     children.dataset.loaded = "1";
     expandButton.textContent = "v";
   } catch (err) {
@@ -2105,8 +2184,11 @@ async function scanNow() {
     showToast(t().needPath);
     return;
   }
+  const scanStart = performance.now();
   setBusy(true);
   emptyState.classList.add("hidden");
+  destroyObservers();
+  releaseGridMedia();
   grid.innerHTML = "";
   pauseAllInline();
   try {
@@ -2143,6 +2225,7 @@ async function scanNow() {
       showToast(data.error || t().scanFail, 4200);
       return;
     }
+    state.perf.scanMs = Math.round(performance.now() - scanStart);
     state.all = data.videos || [];
     state.scannedPath = data.video_dir || videoDir;
     state.scanId = data.scan_id || "";
@@ -2370,6 +2453,7 @@ folderPanelToggle.addEventListener("click", e => {
   else closeFolderPanel();
 });
 folderPanelClose.addEventListener("click", closeFolderPanel);
+folderPanelRefresh.addEventListener("click", () => loadFolderRoots(true));
 favoritePathBtn.addEventListener("click", e => {
   e.stopPropagation();
   toggleFavoritePath(pathInput.value);

@@ -16,9 +16,10 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Enter a folder path manually
 - Use a modern Windows folder picker
 - Remember the last folder path
+- Browse drive roots, recent paths, and favorite paths from a split-layout left sidebar
 - Scan subfolders
 - Switch between 4 / 5 / 6 / 7 / 8 / 9 / 12 / 16 columns
-- Limit simultaneous playback to 12 / 18 / 24 / 30 videos
+- Limit simultaneous playback to 6 / 8 / 12 / 18 / 24 / 30 videos
 - Autoplay visible videos silently in a loop
 - Pause off-screen videos and release distant resources
 - Search by filename
@@ -28,7 +29,6 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Export the current review list to CSV
 - Immersive mode
 - Switch between dark and light themes
-- Switch between text buttons and icon buttons
 - Open a clicked image in a larger preview with previous / next, mouse-wheel navigation, fullscreen slideshow, and hide / show controls
 - Open a clicked video in a larger overlay player with previous / next, playback mode, volume wheel, fullscreen, and hide / show controls
 - Show a video file in its folder
@@ -109,11 +109,14 @@ http://127.0.0.1:8787
 You can:
 
 - Enter a folder path manually, for example `C:\Users\YourName\Videos`
+- Click the sidebar button to open the split-layout folder tree
+- Use the star button inside the path field to favorite the current path
+- Use the history button inside the path field to reopen recent paths or clear path history
 - Click `Choose Folder`
 - Enable `Remember path`
 - Enable `Scan subfolders`
 
-Then click `Scan`.
+Choosing a path from the folder panel or Windows folder picker fills the path field and starts scanning automatically. If you type a path manually, press Enter or click `Scan`.
 
 ### 3. Review media
 
@@ -129,11 +132,11 @@ Then click `Scan`.
 
 ### 4. Interface options
 
-The top-right toolbar contains quick controls for:
+The top toolbar and Settings menu contain quick controls for:
 
 - Language: English / Chinese
 - Theme: dark / light
-- Button style: text buttons / icon buttons
+- Path history: clear recent paths while keeping favorites
 
 ## Recommended Settings
 
@@ -174,7 +177,7 @@ config.json
 
 This file can contain local folder paths, so it should not be uploaded to GitHub. Use `config.example.json` as the shareable example instead.
 
-Settings such as language, theme, button style, slideshow interval, slideshow effect, fit mode, and loop mode are also saved locally in `config.json`.
+Settings such as language, theme, path history, favorite paths, slideshow interval, slideshow effect, fit mode, and loop mode are also saved locally in `config.json`.
 
 ## Project Structure
 

@@ -34,6 +34,7 @@ import sys
 import threading
 import time
 import uuid
+import ctypes
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, quote
@@ -65,6 +66,8 @@ DEFAULT_CONFIG = {
     "language": "en",
     "theme": "dark",
     "button_style": "text",
+    "path_history": [],
+    "path_favorites": [],
     "slideshow_interval": 5,
     "slideshow_effect": "drift",
     "slideshow_fit": "contain",
@@ -94,6 +97,33 @@ def clamp_int(value, default: int, low: int, high: int) -> int:
     return max(low, min(high, n))
 
 
+def clean_path_list(value, max_items: int = 30) -> list[str]:
+    seen = set()
+    paths = []
+    if not isinstance(value, list):
+        return paths
+    for item in value:
+        p = normalize_path(str(item or ""))
+        if not p:
+            continue
+        key = os.path.normcase(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(p)
+        if len(paths) >= max_items:
+            break
+    return paths
+
+
+def add_recent_path(paths: list[str], path: str, max_items: int = 20) -> list[str]:
+    p = normalize_path(path)
+    if not p:
+        return clean_path_list(paths, max_items)
+    existing = [x for x in clean_path_list(paths, max_items) if os.path.normcase(x) != os.path.normcase(p)]
+    return [p] + existing[: max_items - 1]
+
+
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
         return dict(DEFAULT_CONFIG)
@@ -105,11 +135,13 @@ def load_config() -> dict:
     cfg.update({k: data.get(k, v) for k, v in DEFAULT_CONFIG.items()})
     if not cfg.get("remember_path"):
         cfg["last_video_dir"] = ""
-    cfg["columns"] = clamp_int(cfg.get("columns"), 6, 4, 9)
+    cfg["columns"] = clamp_int(cfg.get("columns"), 6, 4, 16)
     cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 6, 30)
     cfg["wall_autoplay"] = bool(cfg.get("wall_autoplay", True))
     cfg["pause_when_inactive"] = bool(cfg.get("pause_when_inactive", False))
     cfg["language"] = normalize_language(cfg.get("language", "en"))
+    cfg["path_history"] = clean_path_list(cfg.get("path_history"), 20)
+    cfg["path_favorites"] = clean_path_list(cfg.get("path_favorites"), 30)
     cfg["slideshow_interval"] = clamp_int(cfg.get("slideshow_interval"), 5, 3, 12)
     if cfg.get("slideshow_effect") not in {"fade", "slide", "drift", "random"}:
         cfg["slideshow_effect"] = "drift"
@@ -121,15 +153,24 @@ def load_config() -> dict:
 
 def save_config(cfg: dict) -> dict:
     merged = dict(DEFAULT_CONFIG)
+    if CONFIG_FILE.exists():
+        try:
+            existing = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            if isinstance(existing, dict):
+                merged.update({k: existing.get(k, v) for k, v in DEFAULT_CONFIG.items()})
+        except Exception:
+            pass
     merged.update({k: cfg.get(k, v) for k, v in DEFAULT_CONFIG.items()})
     merged["remember_path"] = bool(merged.get("remember_path"))
     merged["recursive"] = bool(merged.get("recursive"))
     merged["immersive"] = bool(merged.get("immersive"))
-    merged["columns"] = clamp_int(merged.get("columns"), 6, 4, 9)
+    merged["columns"] = clamp_int(merged.get("columns"), 6, 4, 16)
     merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 6, 30)
     merged["wall_autoplay"] = bool(merged.get("wall_autoplay", True))
     merged["pause_when_inactive"] = bool(merged.get("pause_when_inactive", False))
     merged["language"] = normalize_language(merged.get("language", "en"))
+    merged["path_history"] = clean_path_list(merged.get("path_history"), 20)
+    merged["path_favorites"] = clean_path_list(merged.get("path_favorites"), 30)
     merged["theme"] = "light" if merged.get("theme") == "light" else "dark"
     merged["button_style"] = "icons" if merged.get("button_style") == "icons" else "text"
     merged["slideshow_interval"] = clamp_int(merged.get("slideshow_interval"), 5, 1, 15)
@@ -214,6 +255,57 @@ def log_file_action(action: str, source: Path, destination: Path) -> None:
     }
     with ACTION_LOG_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def list_drive_roots() -> list[dict]:
+    roots = []
+    if os.name == "nt":
+        drives = []
+        if hasattr(os, "listdrives"):
+            try:
+                drives = list(os.listdrives())
+            except Exception:
+                drives = []
+        if not drives:
+            try:
+                mask = ctypes.windll.kernel32.GetLogicalDrives()
+                drives = [f"{chr(code)}:\\" for code in range(ord("A"), ord("Z") + 1) if mask & (1 << (code - ord("A")))]
+            except Exception:
+                drives = [f"{chr(code)}:\\" for code in range(ord("A"), ord("Z") + 1)]
+        for drive in drives:
+            p = Path(drive)
+            if p.exists():
+                roots.append({"name": drive.rstrip("\\"), "path": str(p), "type": "drive"})
+    else:
+        roots.append({"name": "/", "path": "/", "type": "root"})
+        home = str(Path.home())
+        if home != "/":
+            roots.append({"name": "Home", "path": home, "type": "home"})
+    return roots
+
+
+def list_child_folders(path: str, limit: int = 300) -> tuple[list[dict], str | None]:
+    folder = Path(normalize_path(path))
+    if not folder.exists() or not folder.is_dir():
+        return [], "Folder does not exist."
+    entries = []
+    try:
+        children = list(folder.iterdir())
+    except PermissionError:
+        return [], "Permission denied."
+    except Exception as exc:
+        return [], f"Could not list folder: {exc}"
+    dirs = []
+    for child in children:
+        try:
+            if child.is_dir():
+                dirs.append(child)
+        except Exception:
+            continue
+    dirs.sort(key=lambda p: p.name.lower())
+    for child in dirs[:limit]:
+        entries.append({"name": child.name, "path": str(child), "type": "folder"})
+    return entries, None
 
 
 def get_current_video_dir() -> Path | None:
@@ -703,6 +795,17 @@ class AppHandler(BaseHTTPRequestHandler):
             selected = choose_folder_dialog()
             self.send_json({"ok": True, "path": selected})
             return
+        if path == "/api/fs/roots":
+            self.send_json({"ok": True, "roots": list_drive_roots()})
+            return
+        if path == "/api/fs/list":
+            folder_path = qs.get("path", [""])[0]
+            folders, error = list_child_folders(unquote(folder_path))
+            if error:
+                self.send_json({"ok": False, "error": error, "folders": []}, 400)
+            else:
+                self.send_json({"ok": True, "path": normalize_path(unquote(folder_path)), "folders": folders})
+            return
         if path == "/api/open":
             rel = qs.get("path", [""])[0]
             scan_id = qs.get("scan_id", [""])[0]
@@ -734,7 +837,7 @@ class AppHandler(BaseHTTPRequestHandler):
             video_dir = normalize_path(payload.get("video_dir", ""))
             recursive = bool(payload.get("recursive", False))
             remember_path = bool(payload.get("remember_path", False))
-            columns = clamp_int(payload.get("columns"), 6, 4, 9)
+            columns = clamp_int(payload.get("columns"), 6, 4, 16)
             play_limit = clamp_int(payload.get("play_limit"), 24, 6, 30)
             sort_mode = payload.get("sort_mode", "mtime_desc")
             immersive = bool(payload.get("immersive", False))
@@ -744,9 +847,12 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": error, "videos": []}, 400)
                 return
             set_current_video_dir(video_dir)
+            current_cfg = load_config()
             cfg = save_config({
                 "remember_path": remember_path,
                 "last_video_dir": video_dir if remember_path else "",
+                "path_history": add_recent_path(current_cfg.get("path_history", []), video_dir),
+                "path_favorites": current_cfg.get("path_favorites", []),
                 "recursive": recursive,
                 "columns": columns,
                 "play_limit": play_limit,
@@ -777,7 +883,7 @@ class AppHandler(BaseHTTPRequestHandler):
             cfg.update({
                 "remember_path": bool(payload.get("remember_path", cfg.get("remember_path", False))),
                 "recursive": bool(payload.get("recursive", cfg.get("recursive", False))),
-                "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 4, 9),
+                "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 4, 16),
                 "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 6, 30),
                 "wall_autoplay": bool(payload.get("wall_autoplay", cfg.get("wall_autoplay", True))),
                 "pause_when_inactive": bool(payload.get("pause_when_inactive", cfg.get("pause_when_inactive", False))),
@@ -796,6 +902,31 @@ class AppHandler(BaseHTTPRequestHandler):
                 cfg["last_video_dir"] = normalize_path(payload.get("last_video_dir", current))
             else:
                 cfg["last_video_dir"] = ""
+            cfg = save_config(cfg)
+            self.send_json({"ok": True, "config": cfg})
+            return
+        if path == "/api/path-state":
+            cfg = load_config()
+            action = str(payload.get("action", "")).strip()
+            folder_path = normalize_path(payload.get("path", ""))
+            if action == "favorite":
+                favorites = clean_path_list(cfg.get("path_favorites"), 30)
+                exists = any(os.path.normcase(x) == os.path.normcase(folder_path) for x in favorites)
+                if folder_path and not exists:
+                    favorites.insert(0, folder_path)
+                cfg["path_favorites"] = clean_path_list(favorites, 30)
+            elif action == "unfavorite":
+                cfg["path_favorites"] = [
+                    x for x in clean_path_list(cfg.get("path_favorites"), 30)
+                    if os.path.normcase(x) != os.path.normcase(folder_path)
+                ]
+            elif action == "history":
+                cfg["path_history"] = add_recent_path(cfg.get("path_history", []), folder_path)
+            elif action == "clear_history":
+                cfg["path_history"] = []
+            else:
+                self.send_json({"ok": False, "error": "Unknown path-state action."}, 400)
+                return
             cfg = save_config(cfg)
             self.send_json({"ok": True, "config": cfg})
             return

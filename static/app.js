@@ -37,6 +37,9 @@ const state = {
   mediaNavTimer: null,
   scannedPath: "",
   scanId: "",
+  pathHistory: [],
+  pathFavorites: [],
+  folderRootsLoaded: false,
   pausedForInactive: false,
   wasModalVideoPlayingBeforeHidden: false,
   wasSlideshowPlayingBeforeHidden: false,
@@ -67,6 +70,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
   scan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h3"/><path d="M17 4h3v3"/><path d="M20 17v3h-3"/><path d="M7 20H4v-3"/><path d="M7 12h10"/></svg>',
   settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  sidebar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M6 8h.01"/><path d="M6 12h.01"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 7h3c4 0 5 10 9 10h5"/><path d="M16 21h5v-5"/><path d="M4 17h3c1.7 0 2.9-1.8 4-4"/><path d="M14 7c.8-.7 1.8-1 3-1h4"/></svg>',
   slideshow: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M10 8v5l4-2.5z"/></svg>',
   star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></svg>',
@@ -116,11 +120,23 @@ const i18n = {
     wallAutoplay: "Auto play wall",
     pauseWhenInactive: "Pause inactive",
     settings: "Settings",
+    folders: "Folders",
+    folderPanelTitle: "Folders",
+    folderFavorites: "Favorites",
+    folderDrives: "Drives",
+    folderEmpty: "No saved paths.",
+    folderLoadFail: "Could not load folders.",
+    addFavorite: "Add favorite",
+    removeFavorite: "Remove favorite",
+    pathHistory: "Path history",
+    noHistory: "No path history.",
     interfaceSettings: "Interface",
     scanSettings: "Scan",
     playbackSettings: "Playback",
     filterSettings: "Filters",
     actionSettings: "Actions",
+    clearHistory: "Clear Path History",
+    historyCleared: "Path history cleared.",
     shuffle: "Shuffle",
     exportCsv: "Export CSV",
     exportEmpty: "No visible items to export.",
@@ -170,6 +186,7 @@ const i18n = {
     chooseOpening: "Opening the Windows folder picker. It may appear behind the browser.",
     choosing: "Choosing...",
     chosen: "Folder selected. Click Scan to load videos.",
+    pathSelectedScanning: "Path selected. Scanning...",
     notChosen: "No folder selected.",
     chooseFail: "Could not open the folder picker. You can enter the path manually.",
     needPath: "Please enter or choose a video folder first.",
@@ -237,11 +254,23 @@ const i18n = {
     wallAutoplay: "墙内自动播放",
     pauseWhenInactive: "后台暂停播放",
     settings: "设置",
+    folders: "文件夹",
+    folderPanelTitle: "文件夹",
+    folderFavorites: "收藏路径",
+    folderDrives: "磁盘",
+    folderEmpty: "暂无保存路径。",
+    folderLoadFail: "文件夹加载失败。",
+    addFavorite: "添加收藏",
+    removeFavorite: "取消收藏",
+    pathHistory: "路径历史",
+    noHistory: "暂无路径历史。",
     interfaceSettings: "界面",
     scanSettings: "扫描",
     playbackSettings: "播放",
     filterSettings: "筛选",
     actionSettings: "操作",
+    clearHistory: "清空路径历史",
+    historyCleared: "路径历史已清空。",
     shuffle: "随机",
     exportCsv: "导出 CSV",
     exportEmpty: "当前没有可导出的项目。",
@@ -291,6 +320,7 @@ const i18n = {
     chooseOpening: "正在打开 Windows 文件夹选择框，可能会出现在浏览器后面。",
     choosing: "选择中...",
     chosen: "已选择文件夹，点击“扫描”开始加载。",
+    pathSelectedScanning: "已选择路径，正在扫描...",
     notChosen: "未选择文件夹。",
     chooseFail: "打开文件夹选择框失败，可以手动输入路径。",
     needPath: "请先输入或选择一个视频文件夹。",
@@ -327,6 +357,14 @@ const $ = s => document.querySelector(s);
 const grid = $("#grid");
 const subInfo = $("#subInfo");
 const pathInput = $("#pathInput");
+const folderPanelToggle = $("#folderPanelToggle");
+const favoritePathBtn = $("#favoritePathBtn");
+const pathHistoryToggle = $("#pathHistoryToggle");
+const pathHistoryMenu = $("#pathHistoryMenu");
+const folderPanel = $("#folderPanel");
+const folderPanelClose = $("#folderPanelClose");
+const folderFavorites = $("#folderFavorites");
+const folderTree = $("#folderTree");
 const chooseFolderBtn = $("#chooseFolderBtn");
 const scanBtn = $("#scanBtn");
 const rememberPath = $("#rememberPath");
@@ -342,6 +380,7 @@ const wallAutoplay = $("#wallAutoplay");
 const pauseWhenInactive = $("#pauseWhenInactive");
 const columnsSelect = $("#columnsSelect");
 const exportCsvBtn = $("#exportCsvBtn");
+const clearHistoryBtn = $("#clearHistoryBtn");
 const pauseBtn = $("#pauseBtn");
 const immersiveBtn = $("#immersiveBtn");
 const expandBtn = $("#expandBtn");
@@ -466,12 +505,15 @@ function applyActionButtons() {
   const themeText = state.theme === "dark" ? labelText("lightTheme", "Light Theme", "亮色主题") : labelText("darkTheme", "Dark Theme", "暗色主题");
   document.body.classList.add("icon-buttons");
   setButtonLabel(settingsToggle, tx.settings, "settings", { iconOnly: true });
+  setButtonLabel(folderPanelToggle, tx.folders, "sidebar", { iconOnly: true });
+  setButtonLabel(pathHistoryToggle, tx.pathHistory, "list", { iconOnly: true });
   setButtonLabel(langToggle, tx.langToggle, "language", { iconOnly: false, iconText: true, title: switchLanguageTitle });
   setButtonLabel(themeToggle, themeText, state.theme === "dark" ? "sun" : "moon", { iconOnly: false, iconText: true });
   setButtonLabel(chooseFolderBtn, tx.chooseFolder, "folder", { iconOnly: true });
   setButtonLabel(scanBtn, tx.scan, "scan", { iconOnly: true });
   setButtonLabel(expandBtn, tx.expand, "fullscreen");
   setButtonLabel(exportCsvBtn, tx.exportCsv, "download", { iconOnly: false, iconText: true });
+  setButtonLabel(clearHistoryBtn, tx.clearHistory, "trash", { iconOnly: false, iconText: true });
   setButtonLabel(pauseBtn, state.playingEnabled ? tx.pauseAll : tx.resume, state.playingEnabled ? "pause" : "play", { iconOnly: true });
   setButtonLabel(immersiveBtn, state.immersive ? tx.exitImmersive : tx.immersive, state.immersive ? "close" : "fullscreen", { iconOnly: true });
   setButtonLabel(modalSlideshow, labelText("slideshowFullscreen", "Slideshow (Fullscreen)", "幻灯片（全屏）"), "slideshow", { iconOnly: true });
@@ -490,6 +532,7 @@ function applyActionButtons() {
   setButtonLabel(slideshowUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
   setButtonLabel(slideshowClose, tx.close, "close", { iconOnly: true });
   document.querySelectorAll(".tiny-btn").forEach(btn => setButtonLabel(btn, tx.location, "folder", { iconOnly: true }));
+  updateFavoritePathButton();
   updateFullscreenLabels();
 }
 
@@ -524,6 +567,10 @@ function applyLanguage() {
   const tx = t();
   document.documentElement.lang = tx.htmlLang;
   pathInput.placeholder = tx.pathPlaceholder;
+  $("#folderPanelTitle").textContent = tx.folderPanelTitle;
+  $("#folderFavoritesTitle").textContent = tx.folderFavorites;
+  $("#folderDrivesTitle").textContent = tx.folderDrives;
+  folderPanelClose.textContent = tx.close;
   chooseFolderBtn.textContent = tx.chooseFolder;
   scanBtn.textContent = tx.scan;
   expandBtn.textContent = tx.expand;
@@ -589,8 +636,6 @@ function applyLanguage() {
   slideshowEffect.querySelector('[value="random"]').textContent = tx.random;
   slideshowFit.querySelector('[value="contain"]').textContent = tx.contain;
   slideshowFit.querySelector('[value="cover"]').textContent = tx.cover;
-  emptyState.querySelector("h2").textContent = tx.emptyTitle;
-  emptyState.querySelector("p").textContent = tx.emptyBody;
   for (const opt of sortSelect.options) {
     opt.textContent = tx.sortOptions[opt.value] || opt.textContent;
   }
@@ -691,12 +736,8 @@ function renderGrid() {
   destroyObservers();
   grid.innerHTML = "";
   state.visibleVideos.clear();
-  emptyState.classList.toggle("hidden", state.view.length > 0);
+  emptyState.classList.add("hidden");
   if (state.view.length === 0) {
-    if (state.all.length > 0) {
-      emptyState.querySelector("h2").textContent = t().noMatchTitle;
-      emptyState.querySelector("p").textContent = t().noMatchBody;
-    }
     updateSubInfo();
     return;
   }
@@ -1330,6 +1371,253 @@ async function runFileAction(action) {
   }
 }
 
+function pathKey(path) {
+  return String(path || "").trim().toLowerCase();
+}
+
+function normalizePathText(path) {
+  return String(path || "").trim().replace(/^"+|"+$/g, "");
+}
+
+function isFavoritePath(path) {
+  const key = pathKey(path);
+  return state.pathFavorites.some(p => pathKey(p) === key);
+}
+
+function pathLabel(path) {
+  const clean = String(path || "").replace(/[\\\/]+$/, "");
+  const parts = clean.split(/[\\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || clean || path;
+}
+
+function renderSavedPathList(container, paths) {
+  container.innerHTML = "";
+  if (!paths.length) {
+    const empty = document.createElement("div");
+    empty.className = "folder-empty";
+    empty.textContent = t().folderEmpty;
+    container.appendChild(empty);
+    return;
+  }
+  for (const path of paths) {
+    container.appendChild(createPathRow(pathLabel(path), path, { favorite: true }));
+  }
+}
+
+function createPathRow(label, path, options = {}) {
+  const row = document.createElement("div");
+  row.className = "folder-row";
+  row.dataset.path = path;
+  if (options.expandable) {
+    const expand = document.createElement("button");
+    expand.className = "folder-expand";
+    expand.type = "button";
+    expand.textContent = ">";
+    expand.title = labelText("expand", "Expand", "展开");
+    expand.addEventListener("click", e => {
+      e.stopPropagation();
+      toggleFolderNode(row, path, expand);
+    });
+    row.appendChild(expand);
+  } else {
+    const spacer = document.createElement("span");
+    spacer.className = "folder-expand-spacer";
+    row.appendChild(spacer);
+  }
+  const select = document.createElement("button");
+  select.className = "folder-path";
+  select.type = "button";
+  select.textContent = label;
+  select.title = path;
+  select.addEventListener("click", () => selectFolderPath(path));
+  row.appendChild(select);
+  if (options.expandable) {
+    const children = document.createElement("div");
+    children.className = "folder-children hidden";
+    row.appendChild(children);
+  }
+  return row;
+}
+
+function renderPathPanel() {
+  renderSavedPathList(folderFavorites, state.pathFavorites);
+  updateFolderStars();
+  renderHistoryMenu();
+  updateFavoritePathButton();
+}
+
+function updateFolderStars() {
+  updateFavoritePathButton();
+}
+
+function renderHistoryMenu() {
+  pathHistoryMenu.innerHTML = "";
+  const title = document.createElement("div");
+  title.className = "path-history-title";
+  title.textContent = t().pathHistory;
+  pathHistoryMenu.appendChild(title);
+  if (!state.pathHistory.length) {
+    const empty = document.createElement("div");
+    empty.className = "path-history-empty";
+    empty.textContent = t().noHistory;
+    pathHistoryMenu.appendChild(empty);
+  } else {
+    for (const path of state.pathHistory) {
+      const item = document.createElement("button");
+      item.className = "path-history-item";
+      item.type = "button";
+      item.textContent = path;
+      item.title = path;
+      item.addEventListener("click", () => {
+        setHistoryMenuOpen(false);
+        selectFolderPath(path);
+      });
+      pathHistoryMenu.appendChild(item);
+    }
+  }
+  const clear = document.createElement("button");
+  clear.className = "path-history-clear";
+  clear.type = "button";
+  clear.textContent = t().clearHistory;
+  clear.addEventListener("click", () => {
+    setHistoryMenuOpen(false);
+    clearPathHistory();
+  });
+  pathHistoryMenu.appendChild(clear);
+}
+
+function setHistoryMenuOpen(open) {
+  if (open) renderHistoryMenu();
+  pathHistoryMenu.classList.toggle("hidden", !open);
+}
+
+function toggleHistoryMenu() {
+  setHistoryMenuOpen(pathHistoryMenu.classList.contains("hidden"));
+}
+
+function updateFavoritePathButton() {
+  const path = pathInput.value.trim();
+  const favorite = path && isFavoritePath(path);
+  favoritePathBtn.classList.toggle("active", !!favorite);
+  setButtonLabel(favoritePathBtn, favorite ? t().removeFavorite : t().addFavorite, "star", { iconOnly: true });
+}
+
+async function openFolderPanel() {
+  folderPanel.classList.remove("hidden");
+  document.body.classList.add("sidebar-open");
+  renderPathPanel();
+  if (!state.folderRootsLoaded) await loadFolderRoots();
+}
+
+function closeFolderPanel() {
+  folderPanel.classList.add("hidden");
+  document.body.classList.remove("sidebar-open");
+}
+
+async function loadFolderRoots() {
+  folderTree.innerHTML = `<div class="folder-empty">${t().scanProgress}</div>`;
+  try {
+    const res = await fetch("/api/fs/roots");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || t().folderLoadFail);
+    folderTree.innerHTML = "";
+    for (const root of data.roots || []) {
+      folderTree.appendChild(createPathRow(root.name || root.path, root.path, { expandable: true }));
+    }
+    state.folderRootsLoaded = true;
+  } catch (err) {
+    console.error(err);
+    folderTree.innerHTML = `<div class="folder-empty">${t().folderLoadFail}</div>`;
+  }
+}
+
+async function toggleFolderNode(row, path, expandButton) {
+  const children = row.querySelector(":scope > .folder-children");
+  if (!children) return;
+  if (children.dataset.loaded === "1") {
+    children.classList.toggle("hidden");
+    expandButton.textContent = children.classList.contains("hidden") ? ">" : "v";
+    return;
+  }
+  expandButton.textContent = "...";
+  children.classList.remove("hidden");
+  children.innerHTML = `<div class="folder-empty">${t().scanProgress}</div>`;
+  try {
+    const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || t().folderLoadFail);
+    children.innerHTML = "";
+    const folders = data.folders || [];
+    if (!folders.length) {
+      children.innerHTML = `<div class="folder-empty">${t().folderEmpty}</div>`;
+    } else {
+      for (const folder of folders) {
+        children.appendChild(createPathRow(folder.name, folder.path, { expandable: true }));
+      }
+    }
+    children.dataset.loaded = "1";
+    expandButton.textContent = "v";
+  } catch (err) {
+    console.error(err);
+    children.innerHTML = `<div class="folder-empty">${t().folderLoadFail}</div>`;
+    expandButton.textContent = ">";
+  }
+}
+
+async function selectFolderPath(path) {
+  pathInput.value = path;
+  updateFavoritePathButton();
+  showToast(t().pathSelectedScanning, 1600);
+  await scanNow();
+}
+
+async function toggleFavoritePath(path) {
+  path = normalizePathText(path || pathInput.value);
+  const favorite = isFavoritePath(path);
+  if (!path) {
+    showToast(t().needPath);
+    return;
+  }
+  try {
+    const res = await fetch("/api/path-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: favorite ? "unfavorite" : "favorite", path }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || t().unknown);
+    state.pathFavorites = data.config?.path_favorites || [];
+    state.pathHistory = data.config?.path_history || state.pathHistory;
+    renderPathPanel();
+    renderHistoryMenu();
+    updateFavoritePathButton();
+  } catch (err) {
+    console.error(err);
+    showToast(t().configFail, 2600);
+  }
+}
+
+async function clearPathHistory() {
+  try {
+    const res = await fetch("/api/path-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear_history" }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || t().unknown);
+    state.pathHistory = data.config?.path_history || [];
+    state.pathFavorites = data.config?.path_favorites || state.pathFavorites;
+    renderPathPanel();
+    renderHistoryMenu();
+    updateFavoritePathButton();
+    showToast(t().historyCleared, 2200);
+  } catch (err) {
+    console.error(err);
+    showToast(t().configFail, 2600);
+  }
+}
+
 async function chooseFolder() {
   showToast(t().chooseOpening, 3500);
   chooseFolderBtn.disabled = true;
@@ -1339,7 +1627,8 @@ async function chooseFolder() {
     const data = await res.json();
     if (data.ok && data.path) {
       pathInput.value = data.path;
-      showToast(t().chosen);
+      showToast(t().pathSelectedScanning, 1600);
+      await scanNow();
     } else {
       showToast(t().notChosen);
     }
@@ -1358,9 +1647,7 @@ async function scanNow() {
     return;
   }
   setBusy(true);
-  emptyState.classList.remove("hidden");
-  emptyState.querySelector("h2").textContent = t().scanProgress;
-  emptyState.querySelector("p").textContent = videoDir;
+  emptyState.classList.add("hidden");
   grid.innerHTML = "";
   pauseAllInline();
   try {
@@ -1388,15 +1675,14 @@ async function scanNow() {
       state.all = [];
       state.view = [];
       renderGrid();
-      emptyState.classList.remove("hidden");
-      emptyState.querySelector("h2").textContent = t().scanFail;
-      emptyState.querySelector("p").textContent = data.error || t().unknown;
       showToast(data.error || t().scanFail, 4200);
       return;
     }
     state.all = data.videos || [];
     state.scannedPath = data.video_dir || videoDir;
     state.scanId = data.scan_id || "";
+    state.pathHistory = data.config?.path_history || state.pathHistory;
+    state.pathFavorites = data.config?.path_favorites || state.pathFavorites;
     state.recursive = !!data.recursive;
     state.rememberPath = rememberPath.checked;
     state.sizeFilter = "all";
@@ -1406,11 +1692,12 @@ async function scanNow() {
     dateFilterSelect.value = "all";
     mediaTypeSelect.value = "all";
     if (state.all.length === 0) {
-      emptyState.classList.remove("hidden");
-      emptyState.querySelector("h2").textContent = t().noVideosTitle;
-      emptyState.querySelector("p").textContent = t().noVideosBody;
+      showToast(t().noVideosTitle, 3200);
     }
     applyFilters();
+    renderPathPanel();
+    renderHistoryMenu();
+    updateFavoritePathButton();
     showToast(t().scanDone(state.all.length));
   } catch (e) {
     console.error(e);
@@ -1529,6 +1816,8 @@ async function init() {
     state.sortMode = cfg.sort_mode || "mtime_desc";
     state.immersive = !!cfg.immersive;
     state.language = cfg.language === "zh" ? "zh" : "en";
+    state.pathHistory = Array.isArray(cfg.path_history) ? cfg.path_history : [];
+    state.pathFavorites = Array.isArray(cfg.path_favorites) ? cfg.path_favorites : [];
     let localTheme = "";
     let localButtonStyle = "";
     try {
@@ -1553,6 +1842,7 @@ async function init() {
     slideshowFit.value = state.slideshowFit;
     slideshowLoop.checked = state.slideshowLoop;
     applyLanguage();
+    renderPathPanel();
     applyLayout();
     setImmersive(state.immersive);
     if (state.rememberPath && pathInput.value.trim()) scanNow();
@@ -1568,6 +1858,21 @@ searchInput.addEventListener("input", () => {
   searchInput._t = setTimeout(applyFilters, 120);
 });
 sortSelect.addEventListener("change", applyFilters);
+folderPanelToggle.addEventListener("click", e => {
+  e.stopPropagation();
+  if (folderPanel.classList.contains("hidden")) openFolderPanel();
+  else closeFolderPanel();
+});
+folderPanelClose.addEventListener("click", closeFolderPanel);
+favoritePathBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  toggleFavoritePath(pathInput.value);
+});
+pathHistoryToggle.addEventListener("click", e => {
+  e.stopPropagation();
+  toggleHistoryMenu();
+});
+pathHistoryMenu.addEventListener("click", e => e.stopPropagation());
 chooseFolderBtn.addEventListener("click", chooseFolder);
 scanBtn.addEventListener("click", scanNow);
 settingsToggle.addEventListener("click", e => {
@@ -1575,7 +1880,11 @@ settingsToggle.addEventListener("click", e => {
   toggleSettingsMenu();
 });
 settingsMenu.addEventListener("click", e => e.stopPropagation());
-document.addEventListener("click", () => setSettingsMenuOpen(false));
+document.addEventListener("click", () => {
+  setSettingsMenuOpen(false);
+  setHistoryMenuOpen(false);
+});
+pathInput.addEventListener("input", updateFavoritePathButton);
 pathInput.addEventListener("keydown", e => {
   if (e.key === "Enter") scanNow();
 });
@@ -1604,6 +1913,7 @@ mediaTypeSelect.addEventListener("change", () => {
   state.mediaType = mediaTypeSelect.value;
   applyFilters();
 });
+clearHistoryBtn.addEventListener("click", clearPathHistory);
 exportCsvBtn.addEventListener("click", exportCsv);
 pauseBtn.addEventListener("click", () => {
   state.playingEnabled = !state.playingEnabled;
@@ -1720,6 +2030,14 @@ slideshowLoop.addEventListener("change", () => {
 window.addEventListener("keydown", e => {
   if (e.key === "Escape" && !settingsMenu.classList.contains("hidden")) {
     setSettingsMenuOpen(false);
+    return;
+  }
+  if (e.key === "Escape" && !pathHistoryMenu.classList.contains("hidden")) {
+    setHistoryMenuOpen(false);
+    return;
+  }
+  if (e.key === "Escape" && !folderPanel.classList.contains("hidden")) {
+    closeFolderPanel();
     return;
   }
   if (!slideshow.classList.contains("hidden")) {

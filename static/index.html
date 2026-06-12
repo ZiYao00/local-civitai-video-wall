@@ -10,7 +10,13 @@
   <header id="topbar" class="topbar">
     <div class="topline">
       <div class="path-row">
-        <input id="pathInput" class="path-input" type="text" placeholder="Enter a video folder path, for example C:\Users\YourName\Videos" spellcheck="false" />
+        <button id="folderPanelToggle" class="btn" title="Folders" aria-label="Folders">Folders</button>
+        <div class="path-combo">
+          <button id="favoritePathBtn" class="path-combo-btn" title="Favorite path" aria-label="Favorite path">Favorite</button>
+          <input id="pathInput" class="path-input" type="text" placeholder="Enter a video folder path, for example C:\Users\YourName\Videos" spellcheck="false" />
+          <button id="pathHistoryToggle" class="path-combo-btn" title="Path history" aria-label="Path history">History</button>
+          <div id="pathHistoryMenu" class="path-history-menu hidden"></div>
+        </div>
         <button id="chooseFolderBtn" class="btn">Choose Folder</button>
         <button id="scanBtn" class="btn primary">Scan</button>
         <input id="searchInput" class="search" type="search" placeholder="Search filename..." autocomplete="off" />
@@ -87,6 +93,7 @@
         </div>
         <div class="settings-section">
           <div id="settingsActionsTitle" class="settings-title">Actions</div>
+          <button id="clearHistoryBtn" class="btn settings-btn">Clear Path History</button>
           <button id="exportCsvBtn" class="btn settings-btn">Export CSV</button>
         </div>
       </div>
@@ -94,13 +101,26 @@
       </div>
     </div>
   </header>
-  <main id="mainArea">
-    <section id="grid" class="video-grid" aria-live="polite"></section>
-    <div id="emptyState" class="empty">
-      <h2>Choose a video folder</h2>
-      <p>Enter a folder path manually, or click Choose Folder. After scanning, visible videos will autoplay silently in a loop.</p>
-    </div>
-  </main>
+  <div id="appShell" class="app-shell">
+    <aside id="folderPanel" class="folder-panel hidden" aria-label="Folder browser">
+      <div class="folder-panel-head">
+        <strong id="folderPanelTitle">Folders</strong>
+        <button id="folderPanelClose" class="btn ghost">Close</button>
+      </div>
+      <div class="folder-panel-section">
+        <div id="folderFavoritesTitle" class="folder-panel-title">Favorites</div>
+        <div id="folderFavorites" class="folder-list"></div>
+      </div>
+      <div class="folder-panel-section">
+        <div id="folderDrivesTitle" class="folder-panel-title">Drives</div>
+        <div id="folderTree" class="folder-list folder-tree"></div>
+      </div>
+    </aside>
+    <main id="mainArea">
+      <section id="grid" class="video-grid" aria-live="polite"></section>
+      <div id="emptyState" class="empty hidden"></div>
+    </main>
+  </div>
   <div id="toast" class="toast hidden"></div>
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-backdrop" data-close="1"></div>

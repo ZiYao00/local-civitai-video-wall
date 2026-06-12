@@ -8,6 +8,15 @@
 - Highlighted the Choose Folder button so the main folder entry action is easier to find.
 - Reordered hidden slideshow fullscreen actions to Exit Fullscreen, Show UI, and Back.
 - Removed the obsolete button-style switch from Settings, moved Immersive to the main toolbar, and reordered hidden video fullscreen actions to Exit Fullscreen, Show UI, and Close.
+- Aligned video Hide UI / Show UI fullscreen controls to the same top-right control tray with a subtle slide-in transition.
+- Added a left-side folder browser with drive roots, lazy-loaded folder expansion, recent paths, and favorite paths.
+- Added click-to-scan behavior for folder browser selections and automatic recent-path saving after successful scans.
+- Added a Settings action to clear path history while keeping favorite paths.
+- Changed the folder browser from a floating panel to a split-layout sidebar and added in-path favorite/history controls.
+- Fixed sidebar layout bugs by removing the empty startup prompt, making the default shell single-column, removing per-folder favorite buttons, and keeping the sidebar open after selecting a folder.
+- Reworked `service.bat` for reliable start / stop / restart testing, no-admin Startup-folder autostart, stable CRLF batch labels, and cleaner hidden Python launch commands.
+- Updated `start.bat` to use an absolute app path and input-safe browser launch delay.
+- Fixed saved grid column persistence so 12-column and 16-column layouts can be retained.
 - Made clear modal, slideshow, card, and playback actions icon-first with tooltip labels while keeping text for menu settings and select controls.
 - Reorganized the top toolbar with an icon Settings menu for lower-frequency interface, scan, playback, filter, and export controls.
 - Improved `service.bat` with a stable APPDATA helper script, clearer service/startup status, Python checks, and a start-and-open option.

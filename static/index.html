@@ -16,6 +16,7 @@
           <input id="pathInput" class="path-input" type="text" placeholder="Enter a video folder path, for example C:\Users\YourName\Videos" spellcheck="false" />
           <button id="pathHistoryToggle" class="path-combo-btn" title="Path history" aria-label="Path history">History</button>
           <div id="pathHistoryMenu" class="path-history-menu hidden"></div>
+          <div id="pathSuggestMenu" class="path-suggest-menu hidden"></div>
         </div>
         <button id="chooseFolderBtn" class="btn">Choose Folder</button>
         <button id="scanBtn" class="btn primary">Scan</button>
@@ -60,15 +61,25 @@
           <div id="settingsInterfaceTitle" class="settings-title">Interface</div>
           <button id="langToggle" class="btn settings-btn" title="Switch language" aria-label="Switch language"></button>
           <button id="themeToggle" class="btn settings-btn" title="Toggle theme" aria-label="Toggle theme"></button>
+          <div class="settings-field">
+            <span id="fontSizeLabel" class="settings-field-label">Text size</span>
+            <div id="fontSizeSeg" class="seg settings-seg" title="Text size">
+              <button type="button" data-font-size="small">Small</button>
+              <button type="button" data-font-size="standard">Standard</button>
+              <button type="button" data-font-size="large">Large</button>
+            </div>
+          </div>
         </div>
         <div class="settings-section">
           <div id="settingsScanTitle" class="settings-title">Scan</div>
           <label class="check settings-check"><input id="rememberPath" type="checkbox" /><span id="rememberPathLabel">Remember path</span></label>
-          <label class="check settings-check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders</span></label>
+          <label class="check settings-check"><input id="recursiveScan" type="checkbox" /><span id="recursiveScanLabel">Scan subfolders (max 2 levels)</span></label>
+          <button id="excludeRulesOpen" class="btn settings-btn settings-detail-btn" type="button"><span id="excludeRulesOpenLabel">Filename exclusion rules</span><span id="excludeRulesCount">2</span></button>
         </div>
         <div class="settings-section">
           <div id="settingsPlaybackTitle" class="settings-title">Playback</div>
           <label class="check settings-check"><input id="wallAutoplay" type="checkbox" checked><span id="wallAutoplayLabel">Auto play wall</span></label>
+          <label class="check settings-check"><input id="previewLargeVideos" type="checkbox"><span id="previewLargeVideosLabel">Preview large videos</span></label>
           <label class="check settings-check"><input id="pauseWhenInactive" type="checkbox"><span id="pauseWhenInactiveLabel">Pause inactive</span></label>
         </div>
         <div class="settings-section">
@@ -93,6 +104,7 @@
         </div>
         <div class="settings-section">
           <div id="settingsActionsTitle" class="settings-title">Actions</div>
+          <label class="check settings-check"><input id="confirmTrash" type="checkbox" checked><span id="confirmTrashLabel">Confirm before moving media to Recycle Bin</span></label>
           <button id="clearHistoryBtn" class="btn settings-btn">Clear Path History</button>
           <button id="exportCsvBtn" class="btn settings-btn">Export CSV</button>
         </div>
@@ -117,12 +129,58 @@
       </div>
     </aside>
     <main id="mainArea">
+      <div id="subInfo" class="status-bar hidden"></div>
       <section id="grid" class="video-grid" aria-live="polite"></section>
+      <nav id="gridPager" class="grid-pager hidden" aria-label="Media pages">
+        <button id="gridPagePrev" class="btn" type="button">Previous</button>
+        <span id="gridPageInfo"></span>
+        <button id="gridPageNext" class="btn" type="button">Next</button>
+      </nav>
       <div id="emptyState" class="empty hidden"></div>
     </main>
   </div>
   <div id="toast" class="toast hidden"></div>
-  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div id="excludeRulesDialog" class="settings-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="excludeRulesTitle">
+    <div class="settings-dialog-backdrop" data-exclude-close="1"></div>
+    <div class="settings-dialog-panel">
+      <div class="settings-dialog-head">
+        <strong id="excludeRulesTitle">Filename exclusion rules</strong>
+        <button id="excludeRulesClose" class="btn ghost" type="button">Close</button>
+      </div>
+      <label class="check settings-dialog-toggle"><input id="excludeRulesEnabled" type="checkbox" checked><span id="excludeRulesEnabledLabel">Enable filename exclusion</span></label>
+      <div class="exclude-keyword-entry">
+        <input id="excludeKeywordInput" class="path-input" type="text" maxlength="80" placeholder="Keyword, for example fanart">
+        <button id="excludeKeywordAdd" class="btn primary" type="button">Add</button>
+      </div>
+      <div id="excludeKeywordList" class="exclude-keyword-list"></div>
+      <div class="exclude-scope-block">
+        <span id="excludeScopeLabel">Apply to</span>
+        <div id="excludeScopeSeg" class="seg">
+          <button type="button" data-exclude-scope="image">Images only</button>
+          <button type="button" data-exclude-scope="all">Images and videos</button>
+        </div>
+      </div>
+      <p id="excludeRulesNote" class="settings-dialog-note">Rules match the filename only and apply on the next scan.</p>
+      <div class="settings-dialog-actions">
+        <button id="excludeRulesCancel" class="btn ghost" type="button">Cancel</button>
+        <button id="excludeRulesSave" class="btn primary" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+  <div id="trashConfirmDialog" class="settings-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="trashConfirmTitle">
+    <div class="settings-dialog-backdrop" data-trash-confirm="cancel"></div>
+    <div class="settings-dialog-panel trash-confirm-panel">
+      <div class="settings-dialog-head">
+        <strong id="trashConfirmTitle">Move to Recycle Bin?</strong>
+      </div>
+      <p id="trashConfirmMessage" class="settings-dialog-note">Move this file to the Windows Recycle Bin?</p>
+      <label class="check settings-dialog-toggle"><input id="trashConfirmDontAsk" type="checkbox"><span id="trashConfirmDontAskLabel">Don't ask again</span></label>
+      <div class="settings-dialog-actions">
+        <button id="trashConfirmCancel" class="btn ghost" type="button">Cancel</button>
+        <button id="trashConfirmOk" class="btn primary" type="button">Move</button>
+      </div>
+    </div>
+  </div>  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-backdrop" data-close="1"></div>
     <div class="modal-content">
       <div class="modal-header">
@@ -156,6 +214,7 @@
         <button id="slideshowPrev" class="btn">Prev</button>
         <button id="slideshowPlay" class="btn primary">Pause</button>
         <button id="slideshowNext" class="btn">Next</button>
+        <button id="slideshowMoveTrash" class="btn ghost">Move to Recycle Bin</button>
         <select id="slideshowInterval" class="select small">
           <option value="1">1s</option>
           <option value="2">2s</option>
@@ -196,7 +255,6 @@
       <button id="slideshowBackToPreview" class="btn">Back</button>
     </div>
   </div>
-  <div id="subInfo" class="status-bar">Choose a video folder</div>
   <script src="/static/app.js"></script>
 </body>
 </html>

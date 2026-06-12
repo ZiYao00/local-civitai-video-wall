@@ -3,12 +3,18 @@ const state = {
   view: [],
   playingEnabled: true,
   wallAutoplay: true,
+  previewLargeVideos: false,
   pauseWhenInactive: false,
+  confirmTrash: true,
   currentModalItem: null,
   visibleVideos: new Set(),
   columns: 6,
   playLimit: 24,
   recursive: false,
+  filenameExcludeEnabled: true,
+  filenameExcludeKeywords: ["fanart", "thumb"],
+  filenameExcludeScope: "image",
+  lastExcludedCount: 0,
   rememberPath: false,
   sortMode: "mtime_desc",
   reviewFilter: "all",
@@ -18,6 +24,7 @@ const state = {
   immersive: false,
   language: "en",
   theme: "dark",
+  fontSize: "standard",
   buttonStyle: "text",
   slideshowItems: [],
   slideshowIndex: 0,
@@ -39,6 +46,7 @@ const state = {
   scanId: "",
   pathHistory: [],
   pathFavorites: [],
+  gridPage: 0,
   folderRootsLoaded: false,
   pausedForInactive: false,
   wasModalVideoPlayingBeforeHidden: false,
@@ -49,6 +57,8 @@ const state = {
 const COLUMN_WIDTHS = { 4: 300, 5: 260, 6: 220, 7: 190, 8: 165, 9: 145, 12: 94, 16: 66 };
 const COLUMN_GAPS = { 4: 18, 5: 18, 6: 18, 7: 16, 8: 14, 9: 12, 12: 8, 16: 6 };
 const COLUMN_OPTIONS = Object.keys(COLUMN_WIDTHS).map(Number);
+const LARGE_VIDEO_MB = 500;
+const GRID_PAGE_SIZE = 120;
 
 const ICONS = {
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/><path d="M9 12h11"/></svg>',
@@ -90,7 +100,21 @@ const i18n = {
     scanning: "Scanning...",
     expand: "Expand",
     rememberPath: "Remember path",
-    recursive: "Scan subfolders",
+    recursive: "Scan subfolders (max 2 levels)",
+    excludeRules: "Filename exclusion rules",
+    excludeEnabled: "Enable filename exclusion",
+    excludeKeywordPlaceholder: "Keyword, for example fanart",
+    excludeAdd: "Add",
+    excludeScope: "Apply to",
+    excludeImagesOnly: "Images only",
+    excludeAllMedia: "Images and videos",
+    excludeNote: "Rules match the filename only and apply on the next scan.",
+    excludeSave: "Save",
+    excludeCancel: "Cancel",
+    excludeSaved: "Filename exclusion rules saved.",
+    excludeEmpty: "No exclusion keywords.",
+    excludeDuplicate: "This keyword already exists.",
+    excludeRemove: "Remove keyword",
     search: "Search filename...",
     reviewTitle: "Review filter",
     all: "All",
@@ -118,6 +142,9 @@ const i18n = {
     columnsTitle: "Grid columns",
     playLimitTitle: "Playback limit",
     wallAutoplay: "Auto play wall",
+    previewLargeVideos: "Preview videos over 500 MB in the wall",
+    largeVideoTitle: "Large video",
+    largeVideoHint: "Click to play on demand",
     pauseWhenInactive: "Pause inactive",
     settings: "Settings",
     folders: "Folders",
@@ -130,13 +157,29 @@ const i18n = {
     removeFavorite: "Remove favorite",
     pathHistory: "Path history",
     noHistory: "No path history.",
+    noPathSuggestions: "No folder matches.",
     interfaceSettings: "Interface",
+    fontSize: "Text size",
+    fontSizeSmall: "Small",
+    fontSizeStandard: "Standard",
+    fontSizeLarge: "Large",
     scanSettings: "Scan",
     playbackSettings: "Playback",
     filterSettings: "Filters",
     actionSettings: "Actions",
+    confirmTrashSetting: "Confirm before moving media to Recycle Bin",
+    trashConfirmTitle: "Move to Recycle Bin?",
+    trashConfirmMessage: "Move this file to the Windows Recycle Bin?",
+    trashConfirmDontAsk: "Don't ask again",
+    trashConfirmMove: "Move",
     clearHistory: "Clear Path History",
     historyCleared: "Path history cleared.",
+    removeHistory: "Remove from history",
+    historyRemoved: "Path removed from history.",
+    pagePrevious: "Previous",
+    pageNext: "Next",
+    pageStatus: (page, pages) => `Page ${page} / ${pages}`,
+    pageInfo: (page, pages, count) => `Page ${page} / ${pages} · ${count} items`,
     shuffle: "Shuffle",
     exportCsv: "Export CSV",
     exportEmpty: "No visible items to export.",
@@ -198,12 +241,13 @@ const i18n = {
     reviewSaved: "Review mark saved.",
     reviewFail: "Could not save review mark.",
     moveReview: "Move to Review",
-    moveTrash: "Move to Trash",
+    moveTrash: "Move to Recycle Bin",
     confirmReview: "Move this file to _video_wall_review? The original file path will change.",
-    confirmTrash: "Move this file to _video_wall_trash? This is safer than permanent delete.",
     fileActionDone: "File moved. The current list was updated.",
     fileActionFail: "File action failed.",
-    scanDone: n => `Scan complete: ${n} media items`,
+    scanDone: (n, excluded = 0) => excluded > 0
+      ? `Scan complete: ${n} media items · ${excluded} excluded`
+      : `Scan complete: ${n} media items`,
     configFail: "Could not load settings.",
     sortOptions: {
       mtime_desc: "Newest modified",
@@ -224,7 +268,21 @@ const i18n = {
     scanning: "扫描中...",
     expand: "展开",
     rememberPath: "记住路径",
-    recursive: "扫描子文件夹",
+    recursive: "扫描子文件夹（最多 2 层）",
+    excludeRules: "文件名排除规则",
+    excludeEnabled: "启用文件名排除",
+    excludeKeywordPlaceholder: "输入关键词，例如 fanart",
+    excludeAdd: "添加",
+    excludeScope: "应用范围",
+    excludeImagesOnly: "仅图片",
+    excludeAllMedia: "图片和视频",
+    excludeNote: "仅匹配文件名，并从下一次扫描开始生效。",
+    excludeSave: "保存",
+    excludeCancel: "取消",
+    excludeSaved: "文件名排除规则已保存。",
+    excludeEmpty: "暂无排除关键词。",
+    excludeDuplicate: "这个关键词已经存在。",
+    excludeRemove: "删除关键词",
     search: "搜索文件名...",
     reviewTitle: "审核筛选",
     all: "全部",
@@ -252,6 +310,9 @@ const i18n = {
     columnsTitle: "卡片列数",
     playLimitTitle: "同时播放上限",
     wallAutoplay: "墙内自动播放",
+    previewLargeVideos: "允许墙内预览 500MB 以上视频",
+    largeVideoTitle: "大文件视频",
+    largeVideoHint: "点击后按需播放",
     pauseWhenInactive: "后台暂停播放",
     settings: "设置",
     folders: "文件夹",
@@ -264,13 +325,29 @@ const i18n = {
     removeFavorite: "取消收藏",
     pathHistory: "路径历史",
     noHistory: "暂无路径历史。",
+    noPathSuggestions: "没有匹配的文件夹。",
     interfaceSettings: "界面",
+    fontSize: "字体大小",
+    fontSizeSmall: "小",
+    fontSizeStandard: "标准",
+    fontSizeLarge: "大",
     scanSettings: "扫描",
     playbackSettings: "播放",
     filterSettings: "筛选",
     actionSettings: "操作",
+    confirmTrashSetting: "移到回收站前确认",
+    trashConfirmTitle: "移到回收站？",
+    trashConfirmMessage: "要把这个文件移动到 Windows 系统回收站吗？",
+    trashConfirmDontAsk: "以后不再提示",
+    trashConfirmMove: "移动",
     clearHistory: "清空路径历史",
     historyCleared: "路径历史已清空。",
+    removeHistory: "删除这条历史记录",
+    historyRemoved: "已删除这条路径历史。",
+    pagePrevious: "上一页",
+    pageNext: "下一页",
+    pageStatus: (page, pages) => `第 ${page} / ${pages} 页`,
+    pageInfo: (page, pages, count) => `第 ${page} / ${pages} 页 · ${count} 项`,
     shuffle: "随机",
     exportCsv: "导出 CSV",
     exportEmpty: "当前没有可导出的项目。",
@@ -332,12 +409,13 @@ const i18n = {
     reviewSaved: "标记已保存。",
     reviewFail: "标记保存失败。",
     moveReview: "移到精选夹",
-    moveTrash: "移到回收夹",
+    moveTrash: "移到回收站",
     confirmReview: "要把这个文件移动到 _video_wall_review 吗？原文件路径会变化。",
-    confirmTrash: "要把这个文件移动到 _video_wall_trash 吗？这不是永久删除。",
     fileActionDone: "文件已移动，当前列表已更新。",
     fileActionFail: "文件操作失败。",
-    scanDone: n => `扫描完成：${n} 个媒体文件`,
+    scanDone: (n, excluded = 0) => excluded > 0
+      ? `扫描完成：显示 ${n} 项 · 已排除 ${excluded} 项`
+      : `扫描完成：${n} 个媒体文件`,
     configFail: "配置加载失败。",
     sortOptions: {
       mtime_desc: "最新修改",
@@ -355,12 +433,17 @@ const i18n = {
 
 const $ = s => document.querySelector(s);
 const grid = $("#grid");
+const gridPager = $("#gridPager");
+const gridPagePrev = $("#gridPagePrev");
+const gridPageNext = $("#gridPageNext");
+const gridPageInfo = $("#gridPageInfo");
 const subInfo = $("#subInfo");
 const pathInput = $("#pathInput");
 const folderPanelToggle = $("#folderPanelToggle");
 const favoritePathBtn = $("#favoritePathBtn");
 const pathHistoryToggle = $("#pathHistoryToggle");
 const pathHistoryMenu = $("#pathHistoryMenu");
+const pathSuggestMenu = $("#pathSuggestMenu");
 const folderPanel = $("#folderPanel");
 const folderPanelClose = $("#folderPanelClose");
 const folderFavorites = $("#folderFavorites");
@@ -369,6 +452,17 @@ const chooseFolderBtn = $("#chooseFolderBtn");
 const scanBtn = $("#scanBtn");
 const rememberPath = $("#rememberPath");
 const recursiveScan = $("#recursiveScan");
+const excludeRulesOpen = $("#excludeRulesOpen");
+const excludeRulesCount = $("#excludeRulesCount");
+const excludeRulesDialog = $("#excludeRulesDialog");
+const excludeRulesClose = $("#excludeRulesClose");
+const excludeRulesCancel = $("#excludeRulesCancel");
+const excludeRulesSave = $("#excludeRulesSave");
+const excludeRulesEnabled = $("#excludeRulesEnabled");
+const excludeKeywordInput = $("#excludeKeywordInput");
+const excludeKeywordAdd = $("#excludeKeywordAdd");
+const excludeKeywordList = $("#excludeKeywordList");
+const excludeScopeSeg = $("#excludeScopeSeg");
 const searchInput = $("#searchInput");
 const reviewFilterSeg = $("#reviewFilterSeg");
 const sizeFilterSelect = $("#sizeFilterSelect");
@@ -377,7 +471,9 @@ const mediaTypeSelect = $("#mediaTypeSelect");
 const sortSelect = $("#sortSelect");
 const playLimitSelect = $("#playLimitSelect");
 const wallAutoplay = $("#wallAutoplay");
+const previewLargeVideos = $("#previewLargeVideos");
 const pauseWhenInactive = $("#pauseWhenInactive");
+const confirmTrash = $("#confirmTrash");
 const columnsSelect = $("#columnsSelect");
 const exportCsvBtn = $("#exportCsvBtn");
 const clearHistoryBtn = $("#clearHistoryBtn");
@@ -388,8 +484,17 @@ const settingsToggle = $("#settingsToggle");
 const settingsMenu = $("#settingsMenu");
 const langToggle = $("#langToggle");
 const themeToggle = $("#themeToggle");
+const fontSizeSeg = $("#fontSizeSeg");
 const emptyState = $("#emptyState");
 const toast = $("#toast");
+const trashConfirmDialog = $("#trashConfirmDialog");
+const trashConfirmTitle = $("#trashConfirmTitle");
+const trashConfirmMessage = $("#trashConfirmMessage");
+const trashConfirmDontAsk = $("#trashConfirmDontAsk");
+const trashConfirmDontAskLabel = $("#trashConfirmDontAskLabel");
+const trashConfirmCancel = $("#trashConfirmCancel");
+const trashConfirmOk = $("#trashConfirmOk");
+let trashConfirmResolve = null;
 const modal = $("#modal");
 const modalContent = $(".modal-content");
 const modalVideo = $("#modalVideo");
@@ -421,6 +526,7 @@ const slideshowClose = $("#slideshowClose");
 const slideshowPrev = $("#slideshowPrev");
 const slideshowPlay = $("#slideshowPlay");
 const slideshowNext = $("#slideshowNext");
+const slideshowMoveTrash = $("#slideshowMoveTrash");
 const slideshowSidePrev = $("#slideshowSidePrev");
 const slideshowSideNext = $("#slideshowSideNext");
 const slideshowInterval = $("#slideshowInterval");
@@ -434,6 +540,7 @@ const slideshowHiddenActions = $("#slideshowHiddenActions");
 const slideshowUiShow = $("#slideshowUiShow");
 const slideshowExitFullscreen = $("#slideshowExitFullscreen");
 const slideshowBackToPreview = $("#slideshowBackToPreview");
+let excludeRulesDraft = null;
 
 function t() {
   return i18n[state.language] || i18n.en;
@@ -473,6 +580,15 @@ function setButtonLabel(button, text, iconName, options = {}) {
 
 function applyTheme() {
   document.body.classList.toggle("theme-light", state.theme === "light");
+}
+
+function applyFontSize() {
+  document.body.classList.remove("font-size-small", "font-size-large");
+  if (state.fontSize === "small") document.body.classList.add("font-size-small");
+  if (state.fontSize === "large") document.body.classList.add("font-size-large");
+  fontSizeSeg.querySelectorAll("button").forEach(button => {
+    button.classList.toggle("active", button.dataset.fontSize === state.fontSize);
+  });
 }
 
 function isModalFullscreen() {
@@ -527,6 +643,7 @@ function applyActionButtons() {
   updateVideoModeUI();
   setButtonLabel(slideshowPrev, tx.prev, "left", { iconOnly: true });
   setButtonLabel(slideshowNext, tx.next, "right", { iconOnly: true });
+  setButtonLabel(slideshowMoveTrash, tx.moveTrash, "trash", { iconOnly: true });
   setButtonLabel(slideshowPlay, state.slideshowPlaying ? tx.pause : tx.play, state.slideshowPlaying ? "pause" : "play", { iconOnly: true });
   setButtonLabel(slideshowUiToggle, compactText("hideUi", "Hide"), "eyeOff", { iconOnly: true });
   setButtonLabel(slideshowUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
@@ -577,6 +694,18 @@ function applyLanguage() {
   langToggle.textContent = tx.langToggle;
   $("#rememberPathLabel").textContent = tx.rememberPath;
   $("#recursiveScanLabel").textContent = tx.recursive;
+  $("#excludeRulesOpenLabel").textContent = tx.excludeRules;
+  $("#excludeRulesTitle").textContent = tx.excludeRules;
+  $("#excludeRulesEnabledLabel").textContent = tx.excludeEnabled;
+  excludeKeywordInput.placeholder = tx.excludeKeywordPlaceholder;
+  excludeKeywordAdd.textContent = tx.excludeAdd;
+  $("#excludeScopeLabel").textContent = tx.excludeScope;
+  excludeScopeSeg.querySelector('[data-exclude-scope="image"]').textContent = tx.excludeImagesOnly;
+  excludeScopeSeg.querySelector('[data-exclude-scope="all"]').textContent = tx.excludeAllMedia;
+  $("#excludeRulesNote").textContent = tx.excludeNote;
+  excludeRulesSave.textContent = tx.excludeSave;
+  excludeRulesCancel.textContent = tx.excludeCancel;
+  excludeRulesClose.textContent = tx.close;
   searchInput.placeholder = tx.search;
   reviewFilterSeg.title = tx.reviewTitle;
   reviewFilterSeg.querySelector('[data-review-filter="all"]').textContent = tx.all;
@@ -600,8 +729,20 @@ function applyLanguage() {
   columnsSelect.title = tx.columnsTitle;
   playLimitSelect.title = tx.playLimitTitle;
   $("#wallAutoplayLabel").textContent = tx.wallAutoplay;
+  $("#previewLargeVideosLabel").textContent = tx.previewLargeVideos;
   $("#pauseWhenInactiveLabel").textContent = tx.pauseWhenInactive;
+  $("#confirmTrashLabel").textContent = tx.confirmTrashSetting;
+  trashConfirmTitle.textContent = tx.trashConfirmTitle;
+  trashConfirmMessage.textContent = tx.trashConfirmMessage;
+  trashConfirmDontAskLabel.textContent = tx.trashConfirmDontAsk;
+  trashConfirmCancel.textContent = tx.close;
+  trashConfirmOk.textContent = tx.trashConfirmMove;
   $("#settingsInterfaceTitle").textContent = tx.interfaceSettings;
+  $("#fontSizeLabel").textContent = tx.fontSize;
+  fontSizeSeg.title = tx.fontSize;
+  fontSizeSeg.querySelector('[data-font-size="small"]').textContent = tx.fontSizeSmall;
+  fontSizeSeg.querySelector('[data-font-size="standard"]').textContent = tx.fontSizeStandard;
+  fontSizeSeg.querySelector('[data-font-size="large"]').textContent = tx.fontSizeLarge;
   $("#settingsScanTitle").textContent = tx.scanSettings;
   $("#settingsPlaybackTitle").textContent = tx.playbackSettings;
   $("#settingsFiltersTitle").textContent = tx.filterSettings;
@@ -624,6 +765,7 @@ function applyLanguage() {
   slideshowClose.textContent = tx.close;
   slideshowPrev.textContent = tx.prev;
   slideshowNext.textContent = tx.next;
+  slideshowMoveTrash.textContent = tx.moveTrash;
   slideshowPlay.textContent = state.slideshowPlaying ? tx.pause : tx.play;
   slideshowLoopLabel.textContent = tx.loop;
   updateFullscreenLabels();
@@ -651,6 +793,9 @@ function applyLanguage() {
   applyActionButtons();
   updateReviewButtons();
   updateSubInfo();
+  updateGridPager();
+  updateExcludeRulesSummary();
+  if (!excludeRulesDialog.classList.contains("hidden")) renderExcludeRulesDraft();
 }
 
 function applyLayout() {
@@ -676,19 +821,132 @@ function toggleSettingsMenu() {
   setSettingsMenuOpen(settingsMenu.classList.contains("hidden"));
 }
 
+function cleanExcludeKeywords(keywords) {
+  const result = [];
+  const seen = new Set();
+  for (const value of Array.isArray(keywords) ? keywords : []) {
+    const keyword = String(value || "").trim().slice(0, 80);
+    const key = keyword.toLocaleLowerCase();
+    if (!keyword || seen.has(key)) continue;
+    seen.add(key);
+    result.push(keyword);
+    if (result.length >= 30) break;
+  }
+  return result;
+}
+
+function updateExcludeRulesSummary() {
+  const count = state.filenameExcludeKeywords.length;
+  excludeRulesCount.textContent = String(count);
+  excludeRulesOpen.classList.toggle("inactive", !state.filenameExcludeEnabled);
+}
+
+function renderExcludeRulesDraft() {
+  if (!excludeRulesDraft) return;
+  excludeRulesEnabled.checked = excludeRulesDraft.enabled;
+  excludeKeywordList.innerHTML = "";
+  if (!excludeRulesDraft.keywords.length) {
+    const empty = document.createElement("div");
+    empty.className = "exclude-keyword-empty";
+    empty.textContent = t().excludeEmpty;
+    excludeKeywordList.appendChild(empty);
+  } else {
+    for (const keyword of excludeRulesDraft.keywords) {
+      const chip = document.createElement("span");
+      chip.className = "exclude-keyword-chip";
+      const text = document.createElement("span");
+      text.textContent = keyword;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.innerHTML = ICONS.close;
+      remove.title = t().excludeRemove;
+      remove.setAttribute("aria-label", t().excludeRemove);
+      remove.addEventListener("click", () => {
+        excludeRulesDraft.keywords = excludeRulesDraft.keywords.filter(item => item !== keyword);
+        renderExcludeRulesDraft();
+      });
+      chip.append(text, remove);
+      excludeKeywordList.appendChild(chip);
+    }
+  }
+  excludeScopeSeg.querySelectorAll("button[data-exclude-scope]").forEach(button => {
+    button.classList.toggle("active", button.dataset.excludeScope === excludeRulesDraft.scope);
+  });
+  excludeKeywordInput.disabled = !excludeRulesDraft.enabled;
+  excludeKeywordAdd.disabled = !excludeRulesDraft.enabled;
+  excludeScopeSeg.classList.toggle("disabled", !excludeRulesDraft.enabled);
+}
+
+function openExcludeRulesDialog() {
+  excludeRulesDraft = {
+    enabled: state.filenameExcludeEnabled,
+    keywords: [...state.filenameExcludeKeywords],
+    scope: state.filenameExcludeScope,
+  };
+  excludeKeywordInput.value = "";
+  setSettingsMenuOpen(false);
+  excludeRulesDialog.classList.remove("hidden");
+  renderExcludeRulesDraft();
+  setTimeout(() => excludeKeywordInput.focus(), 0);
+}
+
+function closeExcludeRulesDialog() {
+  excludeRulesDialog.classList.add("hidden");
+  excludeRulesDraft = null;
+}
+
+function addExcludeKeyword() {
+  if (!excludeRulesDraft || !excludeRulesDraft.enabled) return;
+  const keyword = excludeKeywordInput.value.trim().slice(0, 80);
+  if (!keyword) return;
+  const duplicate = excludeRulesDraft.keywords.some(item => item.toLocaleLowerCase() === keyword.toLocaleLowerCase());
+  if (duplicate) {
+    showToast(t().excludeDuplicate, 1800);
+    return;
+  }
+  if (excludeRulesDraft.keywords.length >= 30) return;
+  excludeRulesDraft.keywords.push(keyword);
+  excludeKeywordInput.value = "";
+  renderExcludeRulesDraft();
+  excludeKeywordInput.focus();
+}
+
+async function saveExcludeRules() {
+  if (!excludeRulesDraft) return;
+  const previous = {
+    enabled: state.filenameExcludeEnabled,
+    keywords: state.filenameExcludeKeywords,
+    scope: state.filenameExcludeScope,
+  };
+  state.filenameExcludeEnabled = excludeRulesDraft.enabled;
+  state.filenameExcludeKeywords = cleanExcludeKeywords(excludeRulesDraft.keywords);
+  state.filenameExcludeScope = excludeRulesDraft.scope === "all" ? "all" : "image";
+  if (!await saveSettingsSoft()) {
+    state.filenameExcludeEnabled = previous.enabled;
+    state.filenameExcludeKeywords = previous.keywords;
+    state.filenameExcludeScope = previous.scope;
+    showToast(t().configFail, 2600);
+    return;
+  }
+  closeExcludeRulesDialog();
+  updateExcludeRulesSummary();
+  showToast(t().excludeSaved, 2200);
+}
+
 function updateSubInfo() {
   const tx = t();
-  const count = state.view.length || state.all.length || 0;
+  if (!state.all.length && !state.scannedPath) {
+    subInfo.classList.add("hidden");
+    subInfo.textContent = "";
+    return;
+  }
+  subInfo.classList.remove("hidden");
   const favCount = state.all.filter(item => item.favorite).length;
   const selectedCount = state.all.filter(item => item.selected).length;
-  const path = state.scannedPath || pathInput.value.trim() || tx.noPath;
-  if (document.body.classList.contains("immersive")) {
-    subInfo.textContent = `${count} ${tx.videos} · ${state.columns} ${tx.cols} · ${tx.playLimit} ${state.playLimit} · ${path}`;
-  } else if (state.all.length) {
-    subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items} · ${tx.favorites} ${favCount} · ${tx.selected} ${selectedCount}`;
-  } else {
-    subInfo.textContent = tx.subChoose;
-  }
+  const pages = gridPageCount();
+  const pageText = pages > 1 ? ` · ${t().pageStatus(state.gridPage + 1, pages)}` : "";
+  const excludedText = state.lastExcludedCount > 0 ? ` · ${state.lastExcludedCount} ${state.language === "zh" ? "项已排除" : "excluded"}` : "";
+  subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items}${pageText} · ${tx.favorites} ${favCount} · ${tx.selected} ${selectedCount}${excludedText}`;
 }
 
 function sortItems(items, mode) {
@@ -713,7 +971,7 @@ function shuffle(items) {
   return arr;
 }
 
-function applyFilters() {
+function applyFilters(resetPage = true) {
   const q = searchInput.value.trim().toLowerCase();
   let items = state.all;
   if (q) items = items.filter(v => v.name.toLowerCase().includes(q) || v.rel.toLowerCase().includes(q));
@@ -728,8 +986,32 @@ function applyFilters() {
   if (state.dateFilter === "month") items = items.filter(v => now - Number(v.mtime) <= 86400 * 30);
   if (state.mediaType !== "all") items = items.filter(v => v.type === state.mediaType);
   state.view = sortItems(items, sortSelect.value);
+  if (resetPage) state.gridPage = 0;
   renderGrid();
   saveSettingsSoft();
+}
+
+function gridPageCount() {
+  return Math.max(1, Math.ceil(state.view.length / GRID_PAGE_SIZE));
+}
+
+function updateGridPager() {
+  const pages = gridPageCount();
+  state.gridPage = Math.max(0, Math.min(state.gridPage, pages - 1));
+  const show = state.view.length > GRID_PAGE_SIZE;
+  gridPager.classList.toggle("hidden", !show);
+  gridPagePrev.disabled = state.gridPage <= 0;
+  gridPageNext.disabled = state.gridPage >= pages - 1;
+  gridPagePrev.textContent = t().pagePrevious;
+  gridPageNext.textContent = t().pageNext;
+  gridPageInfo.textContent = t().pageInfo(state.gridPage + 1, pages, state.view.length);
+}
+
+function setGridPage(page) {
+  const pages = gridPageCount();
+  state.gridPage = Math.max(0, Math.min(Number(page) || 0, pages - 1));
+  renderGrid();
+  document.getElementById("mainArea")?.scrollIntoView({ block: "start" });
 }
 
 function renderGrid() {
@@ -738,17 +1020,26 @@ function renderGrid() {
   state.visibleVideos.clear();
   emptyState.classList.add("hidden");
   if (state.view.length === 0) {
+    updateGridPager();
     updateSubInfo();
     return;
   }
   const frag = document.createDocumentFragment();
-  for (const item of state.view) {
+  const pageStart = state.gridPage * GRID_PAGE_SIZE;
+  const pageItems = state.view.slice(pageStart, pageStart + GRID_PAGE_SIZE);
+  for (const item of pageItems) {
     const card = document.createElement("article");
     card.className = "video-card";
     card.dataset.key = item.key;
     card.dataset.rel = item.rel;
+    const largeVideoPlaceholder = item.type === "video"
+      && Number(item.size_mb) > LARGE_VIDEO_MB
+      && !state.previewLargeVideos;
+    card.classList.toggle("large-video-card", largeVideoPlaceholder);
     const mediaHtml = item.type === "image"
-      ? `<img class="media-image" src="${item.url}" alt="${escapeHtml(item.name)}" loading="lazy" />`
+      ? `<img class="media-image" data-src="${item.url}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" />`
+      : largeVideoPlaceholder
+        ? `<div class="large-video-placeholder">${ICONS.play}<strong>${t().largeVideoTitle}</strong><span>${fmtBytes(item.size_mb)}</span><small>${t().largeVideoHint}</small></div>`
       : `<video muted loop playsinline preload="none" data-src="${item.url}" data-rel="${escapeHtml(item.rel)}"></video>`;
     card.innerHTML = `
       <div class="video-wrap" title="${escapeHtml(item.name)}">
@@ -784,6 +1075,7 @@ function renderGrid() {
   grid.appendChild(frag);
   updateReviewButtons();
   setupObservers();
+  updateGridPager();
   updateSubInfo();
 }
 
@@ -826,7 +1118,7 @@ async function toggleReview(item, field) {
     item.selected = !!data.review.selected;
     state.all = state.all.map(v => v.key === item.key ? { ...v, favorite: item.favorite, selected: item.selected } : v);
     state.view = state.view.map(v => v.key === item.key ? { ...v, favorite: item.favorite, selected: item.selected } : v);
-    applyFilters();
+    applyFilters(false);
     showToast(t().reviewSaved);
   } catch (err) {
     console.error(err);
@@ -877,18 +1169,21 @@ function destroyObservers() {
 }
 
 function setupObservers() {
+  const images = [...document.querySelectorAll(".video-wrap img.media-image")];
   const videos = [...document.querySelectorAll(".video-wrap video")];
   loadObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
-      const video = entry.target;
-      if (entry.isIntersecting) ensureSrc(video);
-      else if (!isNearViewport(video, 1200)) {
-        state.visibleVideos.delete(video);
-        pauseAndRelease(video);
-        video.closest(".video-card")?.classList.remove("paused-by-limit");
+      const media = entry.target;
+      if (entry.isIntersecting) ensureSrc(media);
+      else {
+        if (media.tagName === "VIDEO") {
+          state.visibleVideos.delete(media);
+          media.closest(".video-card")?.classList.remove("paused-by-limit");
+        }
+        pauseAndRelease(media);
       }
     }
-  }, { root: null, rootMargin: "900px 0px", threshold: .01 });
+  }, { root: null, rootMargin: "300px 0px", threshold: .01 });
   playObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
       const video = entry.target;
@@ -901,6 +1196,7 @@ function setupObservers() {
     }
     scheduleUpdatePlaying();
   }, { root: null, rootMargin: "0px", threshold: .32 });
+  for (const image of images) loadObserver.observe(image);
   for (const video of videos) {
     loadObserver.observe(video);
     playObserver.observe(video);
@@ -908,24 +1204,19 @@ function setupObservers() {
   scheduleUpdatePlaying();
 }
 
-function ensureSrc(video) {
-  if (!video.src) {
-    video.src = video.dataset.src;
-    video.load();
+function ensureSrc(media) {
+  if (!media.getAttribute("src") && media.dataset.src) {
+    media.src = media.dataset.src;
+    if (media.tagName === "VIDEO") media.load();
   }
 }
 
-function pauseAndRelease(video) {
-  video.pause();
-  if (video.src) {
-    video.removeAttribute("src");
-    video.load();
+function pauseAndRelease(media) {
+  if (media.tagName === "VIDEO") media.pause();
+  if (media.getAttribute("src")) {
+    media.removeAttribute("src");
+    if (media.tagName === "VIDEO") media.load();
   }
-}
-
-function isNearViewport(el, margin = 0) {
-  const r = el.getBoundingClientRect();
-  return r.bottom > -margin && r.top < window.innerHeight + margin && r.right > -margin && r.left < window.innerWidth + margin;
 }
 
 function isActuallyVisible(el) {
@@ -1347,11 +1638,63 @@ async function openInExplorer(item) {
   }
 }
 
-async function runFileAction(action) {
-  const item = state.currentModalItem;
+function closeTrashConfirmDialog(confirmed) {
+  const dontAsk = trashConfirmDontAsk.checked;
+  trashConfirmDialog.classList.add("hidden");
+  if (confirmed && dontAsk) {
+    state.confirmTrash = false;
+    confirmTrash.checked = false;
+    saveSettingsSoft();
+  }
+  if (trashConfirmResolve) trashConfirmResolve(!!confirmed);
+  trashConfirmResolve = null;
+}
+
+function requestTrashConfirmation() {
+  if (!state.confirmTrash) return Promise.resolve(true);
+  trashConfirmDontAsk.checked = false;
+  trashConfirmDialog.classList.remove("hidden");
+  return new Promise(resolve => {
+    trashConfirmResolve = resolve;
+  });
+}
+
+function removeItemFromState(item) {
+  state.all = state.all.filter(v => v.key !== item.key);
+  state.view = state.view.filter(v => v.key !== item.key);
+  applyFilters(false);
+}
+
+function continueAfterFileAction(item, source, oldIndex) {
+  if (source === "slideshow") {
+    state.slideshowItems = currentImageItems();
+    if (!state.slideshowItems.length) {
+      closeSlideshow();
+      return;
+    }
+    state.slideshowIndex = Math.max(0, Math.min(oldIndex, state.slideshowItems.length - 1));
+    renderSlideshow(1);
+    applyActionButtons();
+    return;
+  }
+
+  if (!modal.classList.contains("hidden")) {
+    const items = item.type === "image" ? currentImageItems() : currentVideoItems();
+    if (!items.length) {
+      closeModal();
+      return;
+    }
+    renderModalItem(items[Math.max(0, Math.min(oldIndex, items.length - 1))]);
+    if (state.currentModalItem?.type === "video") playModalVideoSoon();
+  }
+}
+
+async function runFileAction(action, item = state.currentModalItem, source = "modal") {
   if (!item) return;
-  const message = action === "move_review" ? t().confirmReview : t().confirmTrash;
-  if (!window.confirm(message)) return;
+  const sameTypeItems = item.type === "image" ? currentImageItems() : currentVideoItems();
+  const oldIndex = Math.max(0, sameTypeItems.findIndex(v => v.key === item.key));
+  if (action === "move_review" && !window.confirm(t().confirmReview)) return;
+  if (action === "move_trash" && !(await requestTrashConfirmation())) return;
   try {
     const res = await fetch("/api/file-action", {
       method: "POST",
@@ -1360,10 +1703,8 @@ async function runFileAction(action) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || t().fileActionFail);
-    state.all = state.all.filter(v => v.key !== item.key);
-    state.view = state.view.filter(v => v.key !== item.key);
-    closeModal();
-    applyFilters();
+    removeItemFromState(item);
+    continueAfterFileAction(item, source, oldIndex);
     showToast(t().fileActionDone, 3600);
   } catch (err) {
     console.error(err);
@@ -1400,7 +1741,7 @@ function renderSavedPathList(container, paths) {
     return;
   }
   for (const path of paths) {
-    container.appendChild(createPathRow(pathLabel(path), path, { favorite: true }));
+    container.appendChild(createPathRow(pathLabel(path), path, { removableFavorite: true }));
   }
 }
 
@@ -1431,6 +1772,20 @@ function createPathRow(label, path, options = {}) {
   select.title = path;
   select.addEventListener("click", () => selectFolderPath(path));
   row.appendChild(select);
+  if (options.removableFavorite) {
+    const remove = document.createElement("button");
+    remove.className = "folder-row-remove";
+    remove.type = "button";
+    remove.innerHTML = ICONS.close;
+    remove.title = t().removeFavorite;
+    remove.setAttribute("aria-label", t().removeFavorite);
+    remove.addEventListener("click", e => {
+      e.stopPropagation();
+      toggleFavoritePath(path);
+    });
+    row.classList.add("has-remove");
+    row.appendChild(remove);
+  }
   if (options.expandable) {
     const children = document.createElement("div");
     children.className = "folder-children hidden";
@@ -1450,6 +1805,77 @@ function updateFolderStars() {
   updateFavoritePathButton();
 }
 
+function setPathSuggestMenuOpen(open) {
+  if (open) pathHistoryMenu.classList.add("hidden");
+  pathSuggestMenu.classList.toggle("hidden", !open);
+}
+
+function closePathSuggestions() {
+  clearTimeout(state.pathSuggestTimer);
+  state.pathSuggestions = [];
+  state.pathSuggestIndex = -1;
+  pathSuggestMenu.innerHTML = "";
+  setPathSuggestMenuOpen(false);
+}
+
+function renderPathSuggestions() {
+  pathSuggestMenu.innerHTML = "";
+  if (!state.pathSuggestions.length) {
+    closePathSuggestions();
+    return;
+  }
+  state.pathSuggestions.forEach((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "path-suggest-item";
+    button.classList.toggle("active", index === state.pathSuggestIndex);
+    button.textContent = item.path;
+    button.title = item.path;
+    button.addEventListener("mousedown", e => e.preventDefault());
+    button.addEventListener("click", () => applyPathSuggestion(index, true));
+    pathSuggestMenu.appendChild(button);
+  });
+  setPathSuggestMenuOpen(true);
+}
+
+function applyPathSuggestion(index = state.pathSuggestIndex, scan = false) {
+  const item = state.pathSuggestions[index];
+  if (!item) return;
+  pathInput.value = item.path;
+  updateFavoritePathButton();
+  closePathSuggestions();
+  if (scan) scanNow();
+}
+
+async function loadPathSuggestions() {
+  const value = pathInput.value.trim();
+  if (value.length < 2) {
+    closePathSuggestions();
+    return;
+  }
+  try {
+    const res = await fetch(`/api/fs/suggest?path=${encodeURIComponent(value)}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "suggest failed");
+    state.pathSuggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+    state.pathSuggestIndex = state.pathSuggestions.length ? 0 : -1;
+    renderPathSuggestions();
+  } catch {
+    closePathSuggestions();
+  }
+}
+
+function schedulePathSuggestions() {
+  clearTimeout(state.pathSuggestTimer);
+  state.pathSuggestTimer = setTimeout(loadPathSuggestions, 220);
+}
+
+function movePathSuggestion(direction) {
+  if (pathSuggestMenu.classList.contains("hidden") || !state.pathSuggestions.length) return false;
+  state.pathSuggestIndex = (state.pathSuggestIndex + direction + state.pathSuggestions.length) % state.pathSuggestions.length;
+  renderPathSuggestions();
+  return true;
+}
 function renderHistoryMenu() {
   pathHistoryMenu.innerHTML = "";
   const title = document.createElement("div");
@@ -1463,6 +1889,8 @@ function renderHistoryMenu() {
     pathHistoryMenu.appendChild(empty);
   } else {
     for (const path of state.pathHistory) {
+      const row = document.createElement("div");
+      row.className = "path-history-row";
       const item = document.createElement("button");
       item.className = "path-history-item";
       item.type = "button";
@@ -1472,7 +1900,18 @@ function renderHistoryMenu() {
         setHistoryMenuOpen(false);
         selectFolderPath(path);
       });
-      pathHistoryMenu.appendChild(item);
+      const remove = document.createElement("button");
+      remove.className = "path-history-remove";
+      remove.type = "button";
+      remove.innerHTML = ICONS.close;
+      remove.title = t().removeHistory;
+      remove.setAttribute("aria-label", t().removeHistory);
+      remove.addEventListener("click", e => {
+        e.stopPropagation();
+        removePathHistory(path);
+      });
+      row.append(item, remove);
+      pathHistoryMenu.appendChild(row);
     }
   }
   const clear = document.createElement("button");
@@ -1487,6 +1926,7 @@ function renderHistoryMenu() {
 }
 
 function setHistoryMenuOpen(open) {
+  if (open) closePathSuggestions();
   if (open) renderHistoryMenu();
   pathHistoryMenu.classList.toggle("hidden", !open);
 }
@@ -1618,6 +2058,25 @@ async function clearPathHistory() {
   }
 }
 
+async function removePathHistory(path) {
+  try {
+    const res = await fetch("/api/path-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remove_history", path }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || t().unknown);
+    state.pathHistory = data.config?.path_history || [];
+    state.pathFavorites = data.config?.path_favorites || state.pathFavorites;
+    renderPathPanel();
+    showToast(t().historyRemoved, 1800);
+  } catch (err) {
+    console.error(err);
+    showToast(t().configFail, 2600);
+  }
+}
+
 async function chooseFolder() {
   showToast(t().chooseOpening, 3500);
   chooseFolderBtn.disabled = true;
@@ -1655,14 +2114,20 @@ async function scanNow() {
       video_dir: videoDir,
       remember_path: rememberPath.checked,
       recursive: recursiveScan.checked,
+      filename_exclude_enabled: state.filenameExcludeEnabled,
+      filename_exclude_keywords: state.filenameExcludeKeywords,
+      filename_exclude_scope: state.filenameExcludeScope,
       columns: state.columns,
       play_limit: state.playLimit,
       wall_autoplay: state.wallAutoplay,
+      preview_large_videos: state.previewLargeVideos,
       pause_when_inactive: state.pauseWhenInactive,
+      confirm_trash: state.confirmTrash,
       sort_mode: sortSelect.value,
       immersive: state.immersive,
       language: state.language,
       theme: state.theme,
+      font_size: state.fontSize,
       button_style: state.buttonStyle,
     };
     const res = await fetch("/api/scan", {
@@ -1684,6 +2149,10 @@ async function scanNow() {
     state.pathHistory = data.config?.path_history || state.pathHistory;
     state.pathFavorites = data.config?.path_favorites || state.pathFavorites;
     state.recursive = !!data.recursive;
+    state.filenameExcludeEnabled = data.config?.filename_exclude_enabled !== false;
+    state.filenameExcludeKeywords = cleanExcludeKeywords(data.config?.filename_exclude_keywords || []);
+    state.filenameExcludeScope = data.config?.filename_exclude_scope === "all" ? "all" : "image";
+    state.lastExcludedCount = Number(data.excluded_count || 0);
     state.rememberPath = rememberPath.checked;
     state.sizeFilter = "all";
     state.dateFilter = "all";
@@ -1698,7 +2167,7 @@ async function scanNow() {
     renderPathPanel();
     renderHistoryMenu();
     updateFavoritePathButton();
-    showToast(t().scanDone(state.all.length));
+    showToast(t().scanDone(state.all.length, state.lastExcludedCount));
   } catch (e) {
     console.error(e);
     showToast(t().scanFail, 4200);
@@ -1709,21 +2178,27 @@ async function scanNow() {
 
 async function saveSettingsSoft() {
   try {
-    await fetch("/api/settings", {
+    const response = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         remember_path: rememberPath.checked,
         last_video_dir: pathInput.value.trim(),
         recursive: recursiveScan.checked,
+        filename_exclude_enabled: state.filenameExcludeEnabled,
+        filename_exclude_keywords: state.filenameExcludeKeywords,
+        filename_exclude_scope: state.filenameExcludeScope,
         columns: state.columns,
         play_limit: state.playLimit,
         wall_autoplay: state.wallAutoplay,
+        preview_large_videos: state.previewLargeVideos,
         pause_when_inactive: state.pauseWhenInactive,
+        confirm_trash: state.confirmTrash,
         sort_mode: sortSelect.value,
         immersive: state.immersive,
         language: state.language,
         theme: state.theme,
+        font_size: state.fontSize,
         button_style: state.buttonStyle,
         slideshow_interval: state.slideshowInterval,
         slideshow_effect: state.slideshowEffect,
@@ -1731,7 +2206,11 @@ async function saveSettingsSoft() {
         slideshow_loop: state.slideshowLoop,
       }),
     });
-  } catch {}
+    if (!response.ok) throw new Error("Settings request failed");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function setColumns(cols) {
@@ -1755,6 +2234,13 @@ function setWallAutoplay(enabled, save = true) {
   } else {
     pauseAllInline();
   }
+  if (save) saveSettingsSoft();
+}
+
+function setPreviewLargeVideos(enabled, save = true) {
+  state.previewLargeVideos = !!enabled;
+  previewLargeVideos.checked = state.previewLargeVideos;
+  if (state.all.length) renderGrid();
   if (save) saveSettingsSoft();
 }
 
@@ -1792,6 +2278,13 @@ function setTheme(theme, save = true) {
   if (save) saveSettingsSoft();
 }
 
+function setFontSize(size, save = true) {
+  state.fontSize = ["small", "standard", "large"].includes(size) ? size : "standard";
+  try { localStorage.setItem("localVideoWallFontSize", state.fontSize); } catch {}
+  applyFontSize();
+  if (save) saveSettingsSoft();
+}
+
 function setButtonStyle(style, save = true) {
   state.buttonStyle = style === "icons" ? "icons" : "text";
   try { localStorage.setItem("localVideoWallButtonStyle", state.buttonStyle); } catch {}
@@ -1810,8 +2303,13 @@ async function init() {
     state.playLimit = Number(cfg.play_limit || 24);
     state.playLimit = Math.max(6, Math.min(30, state.playLimit));
     state.wallAutoplay = cfg.wall_autoplay !== false;
+    state.previewLargeVideos = cfg.preview_large_videos === true;
     state.pauseWhenInactive = cfg.pause_when_inactive === true;
+    state.confirmTrash = cfg.confirm_trash !== false;
     state.recursive = !!cfg.recursive;
+    state.filenameExcludeEnabled = cfg.filename_exclude_enabled !== false;
+    state.filenameExcludeKeywords = cleanExcludeKeywords(cfg.filename_exclude_keywords || ["fanart", "thumb"]);
+    state.filenameExcludeScope = cfg.filename_exclude_scope === "all" ? "all" : "image";
     state.rememberPath = !!cfg.remember_path;
     state.sortMode = cfg.sort_mode || "mtime_desc";
     state.immersive = !!cfg.immersive;
@@ -1820,11 +2318,16 @@ async function init() {
     state.pathFavorites = Array.isArray(cfg.path_favorites) ? cfg.path_favorites : [];
     let localTheme = "";
     let localButtonStyle = "";
+    let localFontSize = "";
     try {
       localTheme = localStorage.getItem("localVideoWallTheme") || "";
       localButtonStyle = localStorage.getItem("localVideoWallButtonStyle") || "";
+      localFontSize = localStorage.getItem("localVideoWallFontSize") || "";
     } catch {}
     state.theme = (localTheme || cfg.theme) === "light" ? "light" : "dark";
+    state.fontSize = ["small", "standard", "large"].includes(localFontSize || cfg.font_size)
+      ? (localFontSize || cfg.font_size)
+      : "standard";
     state.buttonStyle = (localButtonStyle || cfg.button_style) === "icons" ? "icons" : "text";
     state.slideshowInterval = Math.max(1, Math.min(15, Number(cfg.slideshow_interval || 5)));
     state.slideshowEffect = ["none", "fade", "slide", "drift", "random"].includes(cfg.slideshow_effect) ? cfg.slideshow_effect : "drift";
@@ -1834,7 +2337,9 @@ async function init() {
     rememberPath.checked = state.rememberPath;
     recursiveScan.checked = state.recursive;
     wallAutoplay.checked = state.wallAutoplay;
+    previewLargeVideos.checked = state.previewLargeVideos;
     pauseWhenInactive.checked = state.pauseWhenInactive;
+    confirmTrash.checked = state.confirmTrash;
     sortSelect.value = state.sortMode;
     playLimitSelect.value = String(state.playLimit);
     slideshowInterval.value = String(state.slideshowInterval);
@@ -1842,6 +2347,7 @@ async function init() {
     slideshowFit.value = state.slideshowFit;
     slideshowLoop.checked = state.slideshowLoop;
     applyLanguage();
+    applyFontSize();
     renderPathPanel();
     applyLayout();
     setImmersive(state.immersive);
@@ -1873,6 +2379,7 @@ pathHistoryToggle.addEventListener("click", e => {
   toggleHistoryMenu();
 });
 pathHistoryMenu.addEventListener("click", e => e.stopPropagation());
+pathSuggestMenu.addEventListener("click", e => e.stopPropagation());
 chooseFolderBtn.addEventListener("click", chooseFolder);
 scanBtn.addEventListener("click", scanNow);
 settingsToggle.addEventListener("click", e => {
@@ -1880,13 +2387,63 @@ settingsToggle.addEventListener("click", e => {
   toggleSettingsMenu();
 });
 settingsMenu.addEventListener("click", e => e.stopPropagation());
+excludeRulesOpen.addEventListener("click", openExcludeRulesDialog);
+excludeRulesClose.addEventListener("click", closeExcludeRulesDialog);
+excludeRulesCancel.addEventListener("click", closeExcludeRulesDialog);
+excludeRulesSave.addEventListener("click", saveExcludeRules);
+excludeRulesDialog.addEventListener("click", e => {
+  if (e.target.dataset.excludeClose === "1") closeExcludeRulesDialog();
+});
+excludeRulesEnabled.addEventListener("change", () => {
+  if (!excludeRulesDraft) return;
+  excludeRulesDraft.enabled = excludeRulesEnabled.checked;
+  renderExcludeRulesDraft();
+});
+excludeKeywordAdd.addEventListener("click", addExcludeKeyword);
+excludeKeywordInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addExcludeKeyword();
+  }
+});
+excludeScopeSeg.addEventListener("click", e => {
+  const button = e.target.closest("button[data-exclude-scope]");
+  if (!button || !excludeRulesDraft?.enabled) return;
+  excludeRulesDraft.scope = button.dataset.excludeScope === "all" ? "all" : "image";
+  renderExcludeRulesDraft();
+});
 document.addEventListener("click", () => {
   setSettingsMenuOpen(false);
   setHistoryMenuOpen(false);
+  closePathSuggestions();
 });
-pathInput.addEventListener("input", updateFavoritePathButton);
+pathInput.addEventListener("input", () => {
+  updateFavoritePathButton();
+  schedulePathSuggestions();
+});
+pathInput.addEventListener("focus", schedulePathSuggestions);
 pathInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") scanNow();
+  if (e.key === "ArrowDown" && movePathSuggestion(1)) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "ArrowUp" && movePathSuggestion(-1)) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "Escape" && !pathSuggestMenu.classList.contains("hidden")) {
+    e.preventDefault();
+    closePathSuggestions();
+    return;
+  }
+  if (e.key === "Enter") {
+    if (!pathSuggestMenu.classList.contains("hidden") && state.pathSuggestIndex >= 0) {
+      e.preventDefault();
+      applyPathSuggestion(state.pathSuggestIndex, true);
+      return;
+    }
+    scanNow();
+  }
 });
 rememberPath.addEventListener("change", saveSettingsSoft);
 recursiveScan.addEventListener("change", saveSettingsSoft);
@@ -1900,7 +2457,12 @@ reviewFilterSeg.addEventListener("click", e => {
 columnsSelect.addEventListener("change", () => setColumns(columnsSelect.value));
 playLimitSelect.addEventListener("change", () => setPlayLimit(playLimitSelect.value));
 wallAutoplay.addEventListener("change", () => setWallAutoplay(wallAutoplay.checked));
+previewLargeVideos.addEventListener("change", () => setPreviewLargeVideos(previewLargeVideos.checked));
 pauseWhenInactive.addEventListener("change", () => setPauseWhenInactive(pauseWhenInactive.checked));
+confirmTrash.addEventListener("change", () => {
+  state.confirmTrash = confirmTrash.checked;
+  saveSettingsSoft();
+});
 sizeFilterSelect.addEventListener("change", () => {
   state.sizeFilter = sizeFilterSelect.value;
   applyFilters();
@@ -1913,7 +2475,14 @@ mediaTypeSelect.addEventListener("change", () => {
   state.mediaType = mediaTypeSelect.value;
   applyFilters();
 });
+trashConfirmCancel.addEventListener("click", () => closeTrashConfirmDialog(false));
+trashConfirmOk.addEventListener("click", () => closeTrashConfirmDialog(true));
+trashConfirmDialog.addEventListener("click", e => {
+  if (e.target.dataset.trashConfirm === "cancel") closeTrashConfirmDialog(false);
+});
 clearHistoryBtn.addEventListener("click", clearPathHistory);
+gridPagePrev.addEventListener("click", () => setGridPage(state.gridPage - 1));
+gridPageNext.addEventListener("click", () => setGridPage(state.gridPage + 1));
 exportCsvBtn.addEventListener("click", exportCsv);
 pauseBtn.addEventListener("click", () => {
   state.playingEnabled = !state.playingEnabled;
@@ -1930,6 +2499,10 @@ immersiveBtn.addEventListener("click", () => setImmersive(true));
 expandBtn.addEventListener("click", () => setImmersive(false));
 langToggle.addEventListener("click", () => setLanguage(state.language === "en" ? "zh" : "en"));
 themeToggle.addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
+fontSizeSeg.addEventListener("click", event => {
+  const button = event.target.closest("button[data-font-size]");
+  if (button) setFontSize(button.dataset.fontSize);
+});
 modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", e => {
   if (e.target?.dataset?.close) closeModal();
@@ -1989,6 +2562,7 @@ slideshow.addEventListener("mousemove", () => {
 slideshowClose.addEventListener("click", closeSlideshow);
 slideshowPrev.addEventListener("click", () => showNextSlide(-1));
 slideshowNext.addEventListener("click", () => showNextSlide(1));
+slideshowMoveTrash.addEventListener("click", () => runFileAction("move_trash", state.slideshowItems[state.slideshowIndex], "slideshow"));
 slideshowSidePrev.addEventListener("click", () => showNextSlide(-1));
 slideshowSideNext.addEventListener("click", () => showNextSlide(1));
 slideshowPlay.addEventListener("click", toggleSlideshowPlay);
@@ -2028,6 +2602,15 @@ slideshowLoop.addEventListener("change", () => {
   saveSettingsSoft();
 });
 window.addEventListener("keydown", e => {
+  const editingTarget = document.activeElement?.closest?.("input, textarea, select, [contenteditable=\"true\"]");
+  if (!trashConfirmDialog.classList.contains("hidden")) {
+    if (e.key === "Escape") closeTrashConfirmDialog(false);
+    return;
+  }
+  if (e.key === "Escape" && !excludeRulesDialog.classList.contains("hidden")) {
+    closeExcludeRulesDialog();
+    return;
+  }
   if (e.key === "Escape" && !settingsMenu.classList.contains("hidden")) {
     setSettingsMenuOpen(false);
     return;
@@ -2041,6 +2624,11 @@ window.addEventListener("keydown", e => {
     return;
   }
   if (!slideshow.classList.contains("hidden")) {
+    if (e.key === "Delete" && !editingTarget) {
+      e.preventDefault();
+      runFileAction("move_trash", state.slideshowItems[state.slideshowIndex], "slideshow");
+      return;
+    }
     if (e.key === "Escape") closeSlideshow();
     if (e.key === " ") {
       e.preventDefault();
@@ -2052,6 +2640,11 @@ window.addEventListener("keydown", e => {
     return;
   }
   if (!modal.classList.contains("hidden")) {
+    if (e.key === "Delete" && !editingTarget && state.currentModalItem) {
+      e.preventDefault();
+      runFileAction("move_trash");
+      return;
+    }
     if (e.key === "Escape") {
       closeModal();
       return;

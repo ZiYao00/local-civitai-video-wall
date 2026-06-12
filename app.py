@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import ntpath
 import posixpath
 import re
 import shutil
@@ -57,14 +58,20 @@ DEFAULT_CONFIG = {
     "remember_path": False,
     "last_video_dir": "",
     "recursive": False,
+    "filename_exclude_enabled": True,
+    "filename_exclude_keywords": ["fanart", "thumb"],
+    "filename_exclude_scope": "image",
     "columns": 6,
     "play_limit": 24,
     "wall_autoplay": True,
+    "preview_large_videos": False,
     "pause_when_inactive": False,
+    "confirm_trash": True,
     "sort_mode": "mtime_desc",
     "immersive": False,
     "language": "en",
     "theme": "dark",
+    "font_size": "standard",
     "button_style": "text",
     "path_history": [],
     "path_favorites": [],
@@ -116,6 +123,23 @@ def clean_path_list(value, max_items: int = 30) -> list[str]:
     return paths
 
 
+def clean_exclude_keywords(value, max_items: int = 30) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    keywords = []
+    seen = set()
+    for item in value:
+        keyword = str(item or "").strip()[:80]
+        key = keyword.casefold()
+        if not keyword or key in seen:
+            continue
+        seen.add(key)
+        keywords.append(keyword)
+        if len(keywords) >= max_items:
+            break
+    return keywords
+
+
 def add_recent_path(paths: list[str], path: str, max_items: int = 20) -> list[str]:
     p = normalize_path(path)
     if not p:
@@ -131,6 +155,8 @@ def load_config() -> dict:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     except Exception:
         return dict(DEFAULT_CONFIG)
+    if "filename_exclude_enabled" not in data and "exclude_cover_images" in data:
+        data["filename_exclude_enabled"] = bool(data.get("exclude_cover_images"))
     cfg = dict(DEFAULT_CONFIG)
     cfg.update({k: data.get(k, v) for k, v in DEFAULT_CONFIG.items()})
     if not cfg.get("remember_path"):
@@ -139,9 +165,14 @@ def load_config() -> dict:
     cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 6, 30)
     cfg["wall_autoplay"] = bool(cfg.get("wall_autoplay", True))
     cfg["pause_when_inactive"] = bool(cfg.get("pause_when_inactive", False))
+    cfg["confirm_trash"] = bool(cfg.get("confirm_trash", True))
     cfg["language"] = normalize_language(cfg.get("language", "en"))
     cfg["path_history"] = clean_path_list(cfg.get("path_history"), 20)
     cfg["path_favorites"] = clean_path_list(cfg.get("path_favorites"), 30)
+    cfg["filename_exclude_enabled"] = bool(cfg.get("filename_exclude_enabled", True))
+    cfg["filename_exclude_keywords"] = clean_exclude_keywords(cfg.get("filename_exclude_keywords"), 30)
+    cfg["filename_exclude_scope"] = "all" if cfg.get("filename_exclude_scope") == "all" else "image"
+    cfg["font_size"] = cfg.get("font_size") if cfg.get("font_size") in {"small", "standard", "large"} else "standard"
     cfg["slideshow_interval"] = clamp_int(cfg.get("slideshow_interval"), 5, 3, 12)
     if cfg.get("slideshow_effect") not in {"fade", "slide", "drift", "random"}:
         cfg["slideshow_effect"] = "drift"
@@ -168,10 +199,15 @@ def save_config(cfg: dict) -> dict:
     merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 6, 30)
     merged["wall_autoplay"] = bool(merged.get("wall_autoplay", True))
     merged["pause_when_inactive"] = bool(merged.get("pause_when_inactive", False))
+    merged["confirm_trash"] = bool(merged.get("confirm_trash", True))
     merged["language"] = normalize_language(merged.get("language", "en"))
     merged["path_history"] = clean_path_list(merged.get("path_history"), 20)
     merged["path_favorites"] = clean_path_list(merged.get("path_favorites"), 30)
+    merged["filename_exclude_enabled"] = bool(merged.get("filename_exclude_enabled", True))
+    merged["filename_exclude_keywords"] = clean_exclude_keywords(merged.get("filename_exclude_keywords"), 30)
+    merged["filename_exclude_scope"] = "all" if merged.get("filename_exclude_scope") == "all" else "image"
     merged["theme"] = "light" if merged.get("theme") == "light" else "dark"
+    merged["font_size"] = merged.get("font_size") if merged.get("font_size") in {"small", "standard", "large"} else "standard"
     merged["button_style"] = "icons" if merged.get("button_style") == "icons" else "text"
     merged["slideshow_interval"] = clamp_int(merged.get("slideshow_interval"), 5, 1, 15)
     if merged.get("slideshow_effect") not in {"none", "fade", "slide", "drift", "random"}:
@@ -245,6 +281,37 @@ def unique_destination(dest_dir: Path, filename: str) -> Path:
             return candidate
     raise RuntimeError("Could not create a unique destination filename")
 
+def move_to_windows_recycle_bin(file_path: Path) -> None:
+    if os.name != "nt":
+        raise RuntimeError("System recycle bin is only supported on Windows.")
+    script = (
+        "$Path = [Console]::In.ReadToEnd().Trim(); "
+        "Add-Type -AssemblyName Microsoft.VisualBasic; "
+        "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile("
+        "$Path, "
+        "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
+        "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)"
+    )
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ],
+        input=str(file_path),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "Unknown recycle bin error").strip()
+        raise RuntimeError(message)
 
 def log_file_action(action: str, source: Path, destination: Path) -> None:
     record = {
@@ -283,6 +350,56 @@ def list_drive_roots() -> list[dict]:
             roots.append({"name": "Home", "path": home, "type": "home"})
     return roots
 
+def suggest_child_folders(partial_path: str, limit: int = 20) -> tuple[list[dict], str | None]:
+    raw = (partial_path or "").strip().strip('"')
+    if not raw:
+        return [], None
+    try:
+        expanded = os.path.expanduser(raw)
+        if os.name == "nt":
+            expanded = expanded.replace("/", "\\")
+            if re.fullmatch(r"[A-Za-z]:", expanded):
+                parent = Path(expanded + "\\")
+                prefix = ""
+            elif expanded.endswith("\\"):
+                parent = Path(expanded)
+                prefix = ""
+            else:
+                parent = Path(ntpath.dirname(expanded) or expanded)
+                prefix = ntpath.basename(expanded)
+        else:
+            if expanded.endswith("/"):
+                parent = Path(expanded)
+                prefix = ""
+            else:
+                parent = Path(os.path.dirname(expanded) or ".")
+                prefix = os.path.basename(expanded)
+    except Exception as exc:
+        return [], f"Invalid path: {exc}"
+    if not parent.exists() or not parent.is_dir():
+        return [], None
+    suggestions = []
+    prefix_key = prefix.casefold()
+    capped_limit = max(1, min(limit, 50))
+    try:
+        children = parent.iterdir()
+        for child in children:
+            try:
+                if not child.is_dir():
+                    continue
+                if prefix_key and not child.name.casefold().startswith(prefix_key):
+                    continue
+                suggestions.append({"name": child.name, "path": str(child)})
+                if len(suggestions) >= capped_limit:
+                    break
+            except Exception:
+                continue
+    except PermissionError:
+        return [], None
+    except Exception as exc:
+        return [], f"Could not list folder: {exc}"
+    suggestions.sort(key=lambda item: item["name"].casefold())
+    return suggestions, None
 
 def list_child_folders(path: str, limit: int = 300) -> tuple[list[dict], str | None]:
     folder = Path(normalize_path(path))
@@ -354,28 +471,58 @@ def safe_rel_to_path(root: Path, rel: str) -> Path:
     return full
 
 
-def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None, str]:
+def scan_videos(
+    video_dir: str,
+    recursive: bool,
+    exclude_enabled: bool = True,
+    exclude_keywords: list[str] | None = None,
+    exclude_scope: str = "image",
+) -> tuple[list[dict], str | None, str, int]:
     root = Path(normalize_path(video_dir))
     if not str(root).strip():
-        return [], "Folder path is empty. Please enter or choose a video folder first.", ""
+        return [], "Folder path is empty. Please enter or choose a video folder first.", "", 0
     if not root.exists():
-        return [], f"Path does not exist: {root}", ""
+        return [], f"Path does not exist: {root}", "", 0
     if not root.is_dir():
-        return [], f"This is not a folder path: {root}", ""
+        return [], f"This is not a folder path: {root}", "", 0
 
-    pattern = "**/*" if recursive else "*"
     files: list[Path] = []
+    excluded_count = 0
+    keyword_keys = [keyword.casefold() for keyword in clean_exclude_keywords(exclude_keywords or [], 30)]
+    exclude_scope = "all" if exclude_scope == "all" else "image"
     try:
-        for p in root.glob(pattern):
-            try:
-                if any(part in INTERNAL_MEDIA_DIRS for part in p.parts):
+        candidates = []
+        if recursive:
+            for current, dirs, names in os.walk(root):
+                current_path = Path(current)
+                try:
+                    depth = len(current_path.relative_to(root).parts)
+                except ValueError:
                     continue
-                if p.is_file() and p.suffix.lower() in MEDIA_EXTENSIONS:
-                    files.append(p)
+                dirs[:] = [name for name in dirs if name not in INTERNAL_MEDIA_DIRS]
+                if depth >= 2:
+                    dirs[:] = []
+                candidates.extend(current_path / name for name in names)
+        else:
+            candidates = list(root.iterdir())
+        for p in candidates:
+            try:
+                if any(part in INTERNAL_MEDIA_DIRS for part in p.relative_to(root).parts):
+                    continue
+                suffix = p.suffix.lower()
+                if not p.is_file() or suffix not in MEDIA_EXTENSIONS:
+                    continue
+                should_filter_type = exclude_scope == "all" or suffix in IMAGE_EXTENSIONS
+                if exclude_enabled and keyword_keys and should_filter_type:
+                    filename_key = p.name.casefold()
+                    if any(keyword in filename_key for keyword in keyword_keys):
+                        excluded_count += 1
+                        continue
+                files.append(p)
             except OSError:
                 continue
     except Exception as exc:
-        return [], f"Scan failed: {exc}", ""
+        return [], f"Scan failed: {exc}", "", 0
 
     try:
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -410,7 +557,7 @@ def scan_videos(video_dir: str, recursive: bool) -> tuple[list[dict], str | None
             })
         except Exception:
             continue
-    return videos, None, scan_id
+    return videos, None, scan_id, excluded_count
 
 
 def _choose_modern_windows_folder(title: str) -> str | None:
@@ -566,7 +713,8 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     try:
         completed = subprocess.run(
             ["powershell", "-NoProfile", "-STA", "-Command", script],
-            capture_output=True,
+            input=str(file_path),
+        capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -763,7 +911,18 @@ class AppHandler(BaseHTTPRequestHandler):
         if not file_path.exists() or not file_path.is_file():
             self.send_json({"ok": False, "error": "File not found"}, 404)
             return
-        target_name = "_video_wall_review" if action == "move_review" else "_video_wall_trash"
+        if action == "move_trash":
+            try:
+                move_to_windows_recycle_bin(file_path)
+            except Exception as exc:
+                self.send_json({"ok": False, "error": f"Move to Recycle Bin failed: {exc}"}, 500)
+                return
+            destination = "Windows Recycle Bin"
+            log_file_action(action, file_path, Path(destination))
+            self.send_json({"ok": True, "action": action, "destination": destination, "new_rel": ""})
+            return
+
+        target_name = "_video_wall_review"
         target_dir = root.resolve() / target_name
         if target_name in file_path.parts:
             self.send_json({"ok": False, "error": "File is already inside the target folder."}, 400)
@@ -797,6 +956,14 @@ class AppHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/fs/roots":
             self.send_json({"ok": True, "roots": list_drive_roots()})
+            return
+        if path == "/api/fs/suggest":
+            partial_path = qs.get("path", [""])[0]
+            suggestions, error = suggest_child_folders(unquote(partial_path))
+            if error:
+                self.send_json({"ok": False, "error": error, "suggestions": []}, 400)
+            else:
+                self.send_json({"ok": True, "suggestions": suggestions})
             return
         if path == "/api/fs/list":
             folder_path = qs.get("path", [""])[0]
@@ -836,13 +1003,18 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/scan":
             video_dir = normalize_path(payload.get("video_dir", ""))
             recursive = bool(payload.get("recursive", False))
+            exclude_enabled = bool(payload.get("filename_exclude_enabled", True))
+            exclude_keywords = clean_exclude_keywords(payload.get("filename_exclude_keywords"), 30)
+            exclude_scope = "all" if payload.get("filename_exclude_scope") == "all" else "image"
             remember_path = bool(payload.get("remember_path", False))
             columns = clamp_int(payload.get("columns"), 6, 4, 16)
             play_limit = clamp_int(payload.get("play_limit"), 24, 6, 30)
             sort_mode = payload.get("sort_mode", "mtime_desc")
             immersive = bool(payload.get("immersive", False))
             language = normalize_language(payload.get("language", "en"))
-            videos, error, scan_id = scan_videos(video_dir, recursive)
+            videos, error, scan_id, excluded_count = scan_videos(
+                video_dir, recursive, exclude_enabled, exclude_keywords, exclude_scope
+            )
             if error:
                 self.send_json({"ok": False, "error": error, "videos": []}, 400)
                 return
@@ -854,14 +1026,20 @@ class AppHandler(BaseHTTPRequestHandler):
                 "path_history": add_recent_path(current_cfg.get("path_history", []), video_dir),
                 "path_favorites": current_cfg.get("path_favorites", []),
                 "recursive": recursive,
+                "filename_exclude_enabled": exclude_enabled,
+                "filename_exclude_keywords": exclude_keywords,
+                "filename_exclude_scope": exclude_scope,
                 "columns": columns,
                 "play_limit": play_limit,
                 "wall_autoplay": bool(payload.get("wall_autoplay", DEFAULT_CONFIG["wall_autoplay"])),
+                "preview_large_videos": bool(payload.get("preview_large_videos", DEFAULT_CONFIG["preview_large_videos"])),
                 "pause_when_inactive": bool(payload.get("pause_when_inactive", DEFAULT_CONFIG["pause_when_inactive"])),
+                "confirm_trash": bool(payload.get("confirm_trash", DEFAULT_CONFIG["confirm_trash"])),
                 "sort_mode": sort_mode,
                 "immersive": immersive,
                 "language": language,
                 "theme": payload.get("theme", DEFAULT_CONFIG["theme"]),
+                "font_size": payload.get("font_size", DEFAULT_CONFIG["font_size"]),
                 "button_style": payload.get("button_style", DEFAULT_CONFIG["button_style"]),
                 "slideshow_interval": payload.get("slideshow_interval", DEFAULT_CONFIG["slideshow_interval"]),
                 "slideshow_effect": payload.get("slideshow_effect", DEFAULT_CONFIG["slideshow_effect"]),
@@ -873,6 +1051,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 "video_dir": video_dir,
                 "scan_id": scan_id,
                 "count": len(videos),
+                "excluded_count": excluded_count,
                 "recursive": recursive,
                 "videos": videos,
                 "config": cfg,
@@ -883,14 +1062,24 @@ class AppHandler(BaseHTTPRequestHandler):
             cfg.update({
                 "remember_path": bool(payload.get("remember_path", cfg.get("remember_path", False))),
                 "recursive": bool(payload.get("recursive", cfg.get("recursive", False))),
+                "filename_exclude_enabled": bool(payload.get("filename_exclude_enabled", cfg.get("filename_exclude_enabled", True))),
+                "filename_exclude_keywords": clean_exclude_keywords(
+                    payload.get("filename_exclude_keywords", cfg.get("filename_exclude_keywords", [])), 30
+                ),
+                "filename_exclude_scope": "all" if payload.get(
+                    "filename_exclude_scope", cfg.get("filename_exclude_scope", "image")
+                ) == "all" else "image",
                 "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 4, 16),
                 "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 6, 30),
                 "wall_autoplay": bool(payload.get("wall_autoplay", cfg.get("wall_autoplay", True))),
+                "preview_large_videos": bool(payload.get("preview_large_videos", cfg.get("preview_large_videos", False))),
                 "pause_when_inactive": bool(payload.get("pause_when_inactive", cfg.get("pause_when_inactive", False))),
+                "confirm_trash": bool(payload.get("confirm_trash", cfg.get("confirm_trash", True))),
                 "sort_mode": payload.get("sort_mode", cfg.get("sort_mode", "mtime_desc")),
                 "immersive": bool(payload.get("immersive", cfg.get("immersive", False))),
                 "language": normalize_language(payload.get("language", cfg.get("language", "en"))),
                 "theme": payload.get("theme", cfg.get("theme", "dark")),
+                "font_size": payload.get("font_size", cfg.get("font_size", "standard")),
                 "button_style": payload.get("button_style", cfg.get("button_style", "text")),
                 "slideshow_interval": payload.get("slideshow_interval", cfg.get("slideshow_interval", 5)),
                 "slideshow_effect": payload.get("slideshow_effect", cfg.get("slideshow_effect", "drift")),
@@ -922,6 +1111,11 @@ class AppHandler(BaseHTTPRequestHandler):
                 ]
             elif action == "history":
                 cfg["path_history"] = add_recent_path(cfg.get("path_history", []), folder_path)
+            elif action == "remove_history":
+                cfg["path_history"] = [
+                    x for x in clean_path_list(cfg.get("path_history"), 20)
+                    if os.path.normcase(x) != os.path.normcase(folder_path)
+                ]
             elif action == "clear_history":
                 cfg["path_history"] = []
             else:

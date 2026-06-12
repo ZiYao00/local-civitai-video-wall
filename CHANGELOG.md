@@ -1,9 +1,29 @@
 # Changelog
 
+## 1.6.12 - 2026-06-12
+
+- Changed Move to Trash to use the Windows Recycle Bin instead of creating `_video_wall_trash` folders in each scanned directory.
+- Added a saved confirmation setting for Recycle Bin moves, including a "Don't ask again" option in the confirmation dialog.
+- Added Delete-key support for moving the current modal or slideshow item to the Windows Recycle Bin.
+- Added address-bar folder autocomplete for typed paths such as `D:\3`, limited to one parent directory level and 20 folder suggestions.
+
+- Added per-item removal controls for favorite paths and path history while retaining the clear-all history action.
+- Added a saved setting for allowing wall previews of videos over 500 MB.
+- Changed videos over 500 MB to lightweight wall placeholders by default while preserving on-demand modal playback.
+- Changed image cards to load only near the viewport and release distant image resources without creating a disk thumbnail cache.
+- Added 120-item grid pagination to keep folders with 1,000 or more media files from overwhelming the browser.
+- Replaced the fixed cover-image exclusion option with configurable filename keywords, an enable switch, removable keyword chips, and image-only or all-media scope.
+- Added excluded-item counts to scan completion feedback.
+- Limited recursive scans to 2 subfolder levels to prevent unexpectedly deep directory traversal.
+- Moved scan counts and review status from the bottom-left floating bar to the right side above the media grid, hidden until a scan is available.
+- Fixed the folder sidebar being covered by the media grid around the 1280 CSS-pixel responsive breakpoint.
+- Added saved small, standard, and large interface text-size options under Settings > Interface.
+- Updated English and Chinese documentation for the new path and media-loading behavior.
+
 ## 1.6.11 - 2026-06-01
 
 - Removed the top logo text to give the main toolbar more horizontal room.
-- Moved the media count / favorite / selected status into a fixed bottom-left status bar.
+- Moved the media count / favorite / selected status into a fixed bottom-left status bar. This was later replaced in 1.6.12 by an inline status above the media grid.
 - Merged the second toolbar into the main toolbar and changed grid columns from segmented buttons to a dropdown.
 - Highlighted the Choose Folder button so the main folder entry action is easier to find.
 - Reordered hidden slideshow fullscreen actions to Exit Fullscreen, Show UI, and Back.
@@ -150,7 +170,7 @@
 - Added media type filters for all / videos / images.
 - Added safe file actions from the modal.
 - Move to review now sends files to `_video_wall_review`.
-- Move to trash now sends files to `_video_wall_trash` instead of permanent deletion.
+- Move to trash now sends files to the Windows Recycle Bin instead of permanent deletion or per-folder `_video_wall_trash` folders.
 - Added local file action logging.
 
 ## 1.2.0 - 2026-05-30

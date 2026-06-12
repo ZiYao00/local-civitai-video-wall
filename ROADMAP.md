@@ -85,6 +85,20 @@ Completed:
 - Text button / icon button display modes
 - Improved fullscreen, close, and playback-mode icons
 
+### v1.7.0 - Path And Large Media Safeguards
+
+Goal: keep routine browsing responsive while making occasional large files safer to encounter.
+
+Completed:
+
+- Individual removal for favorite paths and path history
+- 500 MB large-video wall placeholder with an opt-in preview setting
+- On-demand modal playback for large videos
+- Viewport-aware image loading and distant image resource release
+- 120-item grid pagination for very large mixed-media folders
+- Configurable filename exclusion rules with editable keywords and image/all-media scope
+- No persistent thumbnail cache by default
+
 ## Future Ideas
 
 These are not commitments. They are possible directions if the tool keeps growing.

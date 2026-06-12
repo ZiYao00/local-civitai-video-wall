@@ -13,15 +13,20 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Scan a local video folder
 - Browse videos and images in one wall
 - Start a fullscreen image-only slideshow from an image modal
-- Enter a folder path manually
+- Enter a folder path manually with one-level folder autocomplete
 - Use a modern Windows folder picker
 - Remember the last folder path
 - Browse drive roots, recent paths, and favorite paths from a split-layout left sidebar
-- Scan subfolders
+- Scan subfolders up to 2 levels below the selected folder
+- Configure filename exclusion keywords, enable or disable them, and apply them to images only or to all media
 - Switch between 4 / 5 / 6 / 7 / 8 / 9 / 12 / 16 columns
 - Limit simultaneous playback to 6 / 8 / 12 / 18 / 24 / 30 videos
 - Autoplay visible videos silently in a loop
 - Pause off-screen videos and release distant resources
+- Load wall images only near the viewport and release distant image resources without creating a disk thumbnail cache
+- Show a lightweight placeholder for videos over 500 MB unless large-file wall preview is enabled in Settings
+- Render large scan results in pages of 120 cards to avoid creating thousands of media elements at once
+- Show scan counts and review status above the media grid on the right
 - Search by filename
 - Filter by file size and recent modified date
 - Sort by modified time, filename, or file size
@@ -29,10 +34,12 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Export the current review list to CSV
 - Immersive mode
 - Switch between dark and light themes
+- Choose small, standard, or large interface text
+- Keep the folder sidebar and media grid separated when the browser window is resized
 - Open a clicked image in a larger preview with previous / next, mouse-wheel navigation, fullscreen slideshow, and hide / show controls
 - Open a clicked video in a larger overlay player with previous / next, playback mode, volume wheel, fullscreen, and hide / show controls
 - Show a video file in its folder
-- Move files safely to `_video_wall_review` or `_video_wall_trash`
+- Move files safely to `_video_wall_review` or the Windows Recycle Bin, with optional confirmation
 - Video preview playback modes: loop one, sequential playback, and random playback
 - Slideshow controls: play / pause, previous / next, 1-15s interval, effect, fit, loop, fullscreen, and show / hide controls
 - Slideshow effects: none, fade, slide, drift, and random
@@ -108,7 +115,7 @@ http://127.0.0.1:8787
 
 You can:
 
-- Enter a folder path manually, for example `C:\Users\YourName\Videos`
+- Enter a folder path manually with one-level folder autocomplete, for example `C:\Users\YourName\Videos`
 - Click the sidebar button to open the split-layout folder tree
 - Use the star button inside the path field to favorite the current path
 - Use the history button inside the path field to reopen recent paths or clear path history
@@ -137,6 +144,9 @@ The top toolbar and Settings menu contain quick controls for:
 - Language: English / Chinese
 - Theme: dark / light
 - Path history: clear recent paths while keeping favorites
+- Remove individual history entries or favorite paths directly from their lists
+- Filename exclusion rules: add or remove up to 30 case-insensitive filename keywords; defaults to `fanart` and `thumb` for images
+- Large video wall preview: disabled by default for files over 500 MB; clicking a placeholder still opens the video on demand
 
 ## Recommended Settings
 
@@ -163,7 +173,7 @@ Playback limit 24 or 30
 
 ## Notes
 
-Browsers usually require videos to be muted before autoplay is allowed, so videos in the wall are muted by default.
+Browsers usually require videos to be muted before autoplay is allowed, so videos in the wall are muted by default. Videos over 500 MB use a placeholder in the wall by default so large movies or concert files are not loaded accidentally. This can be changed in Settings.
 
 Click a video to open it in a larger player. You can enable audio manually in that player.
 

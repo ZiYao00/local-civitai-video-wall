@@ -9,6 +9,7 @@ const state = {
   currentModalItem: null,
   visibleVideos: new Set(),
   columns: 6,
+  pageSize: 120,
   playLimit: 24,
   recursive: false,
   filenameExcludeEnabled: true,
@@ -18,6 +19,8 @@ const state = {
   rememberPath: false,
   sortMode: "mtime_desc",
   reviewFilter: "all",
+  batchMode: false,
+  batchSelected: new Set(),
   sizeFilter: "all",
   dateFilter: "all",
   mediaType: "all",
@@ -40,7 +43,11 @@ const state = {
   videoMode: "loop",
   modalControlsHidden: false,
   modalWheelTime: 0,
+  modalWheelBurst: 0,
+  modalToolbarTimer: null,
   slideshowWheelTime: 0,
+  slideshowWheelBurst: 0,
+  slideshowToolbarTimer: null,
   mediaNavTimer: null,
   scannedPath: "",
   scanId: "",
@@ -54,18 +61,19 @@ const state = {
   pausedForInactive: false,
   wasModalVideoPlayingBeforeHidden: false,
   wasSlideshowPlayingBeforeHidden: false,
+  slideshowReturnAfterFullscreenExit: false,
   updateTimer: null,
 };
 
-const COLUMN_WIDTHS = { 4: 300, 5: 260, 6: 220, 7: 190, 8: 165, 9: 145, 12: 94, 16: 66 };
-const COLUMN_GAPS = { 4: 18, 5: 18, 6: 18, 7: 16, 8: 14, 9: 12, 12: 8, 16: 6 };
+const COLUMN_WIDTHS = { 2: 420, 3: 350, 4: 300, 5: 260, 6: 220, 7: 190, 8: 165, 9: 145, 10: 120, 11: 108, 12: 94, 13: 86, 14: 80, 15: 72, 16: 66, 17: 62, 18: 58, 19: 54, 20: 50 };
+const COLUMN_GAPS = { 2: 18, 3: 18, 4: 18, 5: 18, 6: 18, 7: 16, 8: 14, 9: 12, 10: 10, 11: 9, 12: 8, 13: 7, 14: 7, 15: 6, 16: 6, 17: 5, 18: 5, 19: 5, 20: 5 };
 const COLUMN_OPTIONS = Object.keys(COLUMN_WIDTHS).map(Number);
 const LARGE_VIDEO_MB = 500;
-const GRID_PAGE_SIZE = 120;
 
 const ICONS = {
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/><path d="M9 12h11"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>',
+  doubleCheck: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12l3 3L21 5"/><path d="M3 12l3 3 5-5"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>',
   download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
   eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -83,6 +91,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
   scan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h3"/><path d="M17 4h3v3"/><path d="M20 17v3h-3"/><path d="M7 20H4v-3"/><path d="M7 12h10"/></svg>',
   settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg>',
   sidebar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M6 8h.01"/><path d="M6 12h.01"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 7h3c4 0 5 10 9 10h5"/><path d="M16 21h5v-5"/><path d="M4 17h3c1.7 0 2.9-1.8 4-4"/><path d="M14 7c.8-.7 1.8-1 3-1h4"/></svg>',
   slideshow: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M10 8v5l4-2.5z"/></svg>',
@@ -122,7 +131,6 @@ const i18n = {
     reviewTitle: "Review filter",
     all: "All",
     favorites: "Favorites",
-    selected: "Selected",
     sizeFilterTitle: "File size",
     anySize: "Any size",
     smallFiles: "Under 10 MB",
@@ -134,17 +142,26 @@ const i18n = {
     lastWeek: "Last 7d",
     lastMonth: "Last 30d",
     mediaTypeTitle: "Media type",
-    allMedia: "All media",
+    allMedia: "All",
     videosOnly: "Videos",
     imagesOnly: "Images",
     favorite: "Favorite",
     favorited: "Favorited",
-    markSelected: "Select",
-    selectedMarked: "Selected",
+    metadataTitle: "Generation info",
+    metadataModel: "Model",
+    metadataLora: "LoRA",
+    metadataPrompt: "Prompt",
+    metadataNegative: "Negative prompt",
+    metadataSource: "Source / path",
+    metadataBasic: "File info",
+    metadataPending: "No generation metadata detected yet.",
+    copy: "Copy",
+    copied: "Copied.",
     sortTitle: "Sort",
     columnsTitle: "Grid columns",
-    playLimitTitle: "Playback limit",
-    wallAutoplay: "Auto play wall",
+  pageSizeTitle: "Items per page",
+    pageSizeLabelText: "Per page",
+    wallAutoplay: "Auto play wall (2-9 cols)",
     previewLargeVideos: "Preview videos over 500 MB in the wall",
     largeVideoTitle: "Large video",
     largeVideoHint: "Click to play on demand",
@@ -184,6 +201,23 @@ const i18n = {
     pageNext: "Next",
     pageStatus: (page, pages) => `Page ${page} / ${pages}`,
     pageInfo: (page, pages, count) => `Page ${page} / ${pages} · ${count} items`,
+    pageSizeLabel: n => `${n} / page`,
+    resetFilters: "Reset filters",
+    filtersReset: "Filters reset.",
+    batch: "Batch actions",
+    batchExit: "Exit batch",
+    batchInfo: n => `${n} selected`,
+    batchSelectPage: "Select page",
+    batchClear: "Clear",
+    batchFavorite: "Favorite",
+    batchUnfavorite: "Unfavorite",
+    batchTrash: "Move to Recycle Bin",
+    batchExport: "Export CSV",
+    batchSelectItem: "Select",
+    batchSelectedItem: "Selected",
+    batchNoSelection: "Select at least one item first.",
+    batchDone: n => `Batch action finished: ${n} item(s).`,
+    batchTrashConfirm: n => `Move ${n} selected item(s) to the Windows Recycle Bin?`,
     shuffle: "Shuffle",
     exportCsv: "Export CSV",
     exportEmpty: "No visible items to export.",
@@ -229,6 +263,8 @@ const i18n = {
     items: "videos",
     noMatchTitle: "No matching videos",
     noMatchBody: "Try another keyword, clear filters, or switch back to All.",
+    noMediaTitle: "No supported media found",
+    noMediaBody: "This folder has no supported video or image files. Try enabling Scan subfolders or choosing another folder.",
     openFail: "Could not open the folder.",
     chooseOpening: "Opening the Windows folder picker. It may appear behind the browser.",
     choosing: "Choosing...",
@@ -244,7 +280,7 @@ const i18n = {
     noVideosBody: "Currently supports video and image files. Try enabling Scan subfolders.",
     reviewSaved: "Review mark saved.",
     reviewFail: "Could not save review mark.",
-    moveReview: "Move to Review",
+    moveReview: "Move to Review Folder",
     moveTrash: "Move to Recycle Bin",
     confirmReview: "Move this file to _video_wall_review? The original file path will change.",
     fileActionDone: "File moved. The current list was updated.",
@@ -264,7 +300,7 @@ const i18n = {
       random: "Random order",
     },
     colLabel: n => `${n} cols`,
-    playLabel: n => `Play ${n} at once`,
+    pageSizeOption: n => `${n} / page`,
   },
   zh: {
     htmlLang: "zh-CN",
@@ -292,7 +328,6 @@ const i18n = {
     reviewTitle: "审核筛选",
     all: "全部",
     favorites: "收藏",
-    selected: "精选",
     sizeFilterTitle: "文件大小",
     anySize: "任意大小",
     smallFiles: "小于 10 MB",
@@ -304,17 +339,26 @@ const i18n = {
     lastWeek: "最近 7 天",
     lastMonth: "最近 30 天",
     mediaTypeTitle: "媒体类型",
-    allMedia: "全部媒体",
+    allMedia: "全部",
     videosOnly: "视频",
     imagesOnly: "图片",
     favorite: "收藏",
     favorited: "已收藏",
-    markSelected: "精选",
-    selectedMarked: "已精选",
+    metadataTitle: "生成信息",
+    metadataModel: "大模型",
+    metadataLora: "LoRA",
+    metadataPrompt: "正面提示词",
+    metadataNegative: "负面提示词",
+    metadataSource: "来源 / 路径",
+    metadataBasic: "文件信息",
+    metadataPending: "暂未读取到生成元数据。",
+    copy: "复制",
+    copied: "已复制。",
     sortTitle: "排序",
     columnsTitle: "卡片列数",
-    playLimitTitle: "同时播放上限",
-    wallAutoplay: "墙内自动播放",
+  pageSizeTitle: "每页数量",
+    pageSizeLabelText: "每页",
+    wallAutoplay: "墙内自动播放（2-9 列）",
     previewLargeVideos: "允许墙内预览 500MB 以上视频",
     largeVideoTitle: "大文件视频",
     largeVideoHint: "点击后按需播放",
@@ -354,6 +398,23 @@ const i18n = {
     pageNext: "下一页",
     pageStatus: (page, pages) => `第 ${page} / ${pages} 页`,
     pageInfo: (page, pages, count) => `第 ${page} / ${pages} 页 · ${count} 项`,
+    pageSizeLabel: n => `每页 ${n}`,
+    resetFilters: "重置筛选",
+    filtersReset: "筛选已重置。",
+    batch: "批量操作",
+    batchExit: "退出批量",
+    batchInfo: n => `已选择 ${n} 个`,
+    batchSelectPage: "全选本页",
+    batchClear: "清空",
+    batchFavorite: "收藏",
+    batchUnfavorite: "取消收藏",
+    batchTrash: "移到回收站",
+    batchExport: "导出 CSV",
+    batchSelectItem: "选择",
+    batchSelectedItem: "已选择",
+    batchNoSelection: "请先选择至少一个项目。",
+    batchDone: n => `批量操作完成：${n} 个项目。`,
+    batchTrashConfirm: n => `要把已选择的 ${n} 个项目移到 Windows 回收站吗？`,
     shuffle: "随机",
     exportCsv: "导出 CSV",
     exportEmpty: "当前没有可导出的项目。",
@@ -399,6 +460,8 @@ const i18n = {
     items: "个视频",
     noMatchTitle: "没有匹配的视频",
     noMatchBody: "请换一个搜索词、清空筛选，或切回“全部”。",
+    noMediaTitle: "没有找到支持的媒体",
+    noMediaBody: "这个文件夹里没有支持的视频或图片文件。可以尝试开启扫描子文件夹，或选择其它文件夹。",
     openFail: "打开位置失败",
     chooseOpening: "正在打开 Windows 文件夹选择框，可能会出现在浏览器后面。",
     choosing: "选择中...",
@@ -414,9 +477,9 @@ const i18n = {
     noVideosBody: "当前支持常见视频和图片格式。可以尝试勾选“扫描子文件夹”。",
     reviewSaved: "标记已保存。",
     reviewFail: "标记保存失败。",
-    moveReview: "移到精选夹",
+    moveReview: "移到整理夹",
     moveTrash: "移到回收站",
-    confirmReview: "要把这个文件移动到 _video_wall_review 吗？原文件路径会变化。",
+    confirmReview: "要把这个文件移动到 _video_wall_review 整理夹吗？原文件路径会变化。",
     fileActionDone: "文件已移动，当前列表已更新。",
     fileActionFail: "文件操作失败。",
     perfInfo: stats => `扫描 ${stats.scanMs}ms · 渲染 ${stats.renderMs}ms · 本页 ${stats.pageItems} · 已加载 ${stats.loadedMedia}`,
@@ -434,7 +497,7 @@ const i18n = {
       random: "随机顺序",
     },
     colLabel: n => `${n}列`,
-    playLabel: n => `同时播放${n}`,
+    pageSizeOption: n => `每页${n}`,
   },
 };
 
@@ -473,12 +536,11 @@ const excludeKeywordAdd = $("#excludeKeywordAdd");
 const excludeKeywordList = $("#excludeKeywordList");
 const excludeScopeSeg = $("#excludeScopeSeg");
 const searchInput = $("#searchInput");
-const reviewFilterSeg = $("#reviewFilterSeg");
 const sizeFilterSelect = $("#sizeFilterSelect");
 const dateFilterSelect = $("#dateFilterSelect");
-const mediaTypeSelect = $("#mediaTypeSelect");
+const mediaFilterSeg = $("#mediaFilterSeg");
 const sortSelect = $("#sortSelect");
-const playLimitSelect = $("#playLimitSelect");
+const pageSizeInput = $("#pageSizeInput");
 const wallAutoplay = $("#wallAutoplay");
 const previewLargeVideos = $("#previewLargeVideos");
 const pauseWhenInactive = $("#pauseWhenInactive");
@@ -487,6 +549,17 @@ const columnsSelect = $("#columnsSelect");
 const exportCsvBtn = $("#exportCsvBtn");
 const clearHistoryBtn = $("#clearHistoryBtn");
 const pauseBtn = $("#pauseBtn");
+const resetFiltersBtn = $("#resetFiltersBtn");
+const batchToggleBtn = $("#batchToggleBtn");
+const batchBar = $("#batchBar");
+const batchInfo = $("#batchInfo");
+const batchSelectPageBtn = $("#batchSelectPageBtn");
+const batchClearBtn = $("#batchClearBtn");
+const batchFavoriteBtn = $("#batchFavoriteBtn");
+const batchUnfavoriteBtn = $("#batchUnfavoriteBtn");
+const batchTrashBtn = $("#batchTrashBtn");
+const batchExportBtn = $("#batchExportBtn");
+const batchExitBtn = $("#batchExitBtn");
 const immersiveBtn = $("#immersiveBtn");
 const expandBtn = $("#expandBtn");
 const settingsToggle = $("#settingsToggle");
@@ -508,6 +581,7 @@ const modal = $("#modal");
 const modalContent = $(".modal-content");
 const modalVideo = $("#modalVideo");
 const modalImage = $("#modalImage");
+const modalMetadata = $("#modalMetadata");
 const modalName = $("#modalName");
 const modalMeta = $("#modalMeta");
 const modalClose = $("#modalClose");
@@ -592,8 +666,9 @@ function applyTheme() {
 }
 
 function applyFontSize() {
-  document.body.classList.remove("font-size-small", "font-size-large");
+  document.body.classList.remove("font-size-small", "font-size-standard", "font-size-large");
   if (state.fontSize === "small") document.body.classList.add("font-size-small");
+  if (state.fontSize === "standard") document.body.classList.add("font-size-standard");
   if (state.fontSize === "large") document.body.classList.add("font-size-large");
   fontSizeSeg.querySelectorAll("button").forEach(button => {
     button.classList.toggle("active", button.dataset.fontSize === state.fontSize);
@@ -615,13 +690,13 @@ function updateFullscreenLabels() {
   setButtonLabel(modalFullscreen, isModalFullscreen() ? tx.exitFullscreen : tx.fullscreen, isModalFullscreen() ? "fullscreenExit" : "fullscreen", { iconOnly: true });
   setButtonLabel(slideshowFullscreen, isSlideshowFullscreen() ? exitFullScreenText : fullScreenText, isSlideshowFullscreen() ? "fullscreenExit" : "fullscreen", { iconOnly: true });
   setButtonLabel(modalHiddenExitFullscreen, exitFullScreenText, "fullscreenExit", { iconOnly: true });
-  modalHiddenExitFullscreen.classList.toggle("hidden", !(state.modalControlsHidden && isModalFullscreen()));
+  modalHiddenExitFullscreen.classList.add("hidden");
   setButtonLabel(modalHiddenClose, tx.close, "close", { iconOnly: true });
-  modalHiddenActions.classList.toggle("hidden", !state.modalControlsHidden);
+  modalHiddenActions.classList.add("hidden");
   setButtonLabel(slideshowExitFullscreen, exitFullScreenText, "fullscreenExit", { iconOnly: true });
-  slideshowExitFullscreen.classList.toggle("hidden", !(state.slideshowControlsHidden && isSlideshowFullscreen()));
+  slideshowExitFullscreen.classList.add("hidden");
   setButtonLabel(slideshowBackToPreview, labelText("backToPreview", "Back", "返回"), "back", { iconOnly: true });
-  slideshowHiddenActions.classList.toggle("hidden", !state.slideshowControlsHidden);
+  slideshowHiddenActions.classList.add("hidden");
 }
 
 function applyActionButtons() {
@@ -640,13 +715,22 @@ function applyActionButtons() {
   setButtonLabel(exportCsvBtn, tx.exportCsv, "download", { iconOnly: false, iconText: true });
   setButtonLabel(clearHistoryBtn, tx.clearHistory, "trash", { iconOnly: false, iconText: true });
   setButtonLabel(pauseBtn, state.playingEnabled ? tx.pauseAll : tx.resume, state.playingEnabled ? "pause" : "play", { iconOnly: true });
+  setButtonLabel(resetFiltersBtn, tx.resetFilters, "reset", { iconOnly: true });
+  setButtonLabel(batchToggleBtn, state.batchMode ? tx.batchExit : tx.batch, "doubleCheck", { iconOnly: true });
+  setButtonLabel(batchSelectPageBtn, tx.batchSelectPage, "check", { iconOnly: true });
+  setButtonLabel(batchClearBtn, tx.batchClear, "close", { iconOnly: true });
+  setButtonLabel(batchFavoriteBtn, tx.batchFavorite, "star", { iconOnly: true });
+  setButtonLabel(batchUnfavoriteBtn, tx.batchUnfavorite, "star", { iconOnly: true });
+  setButtonLabel(batchTrashBtn, tx.batchTrash, "trash", { iconOnly: true });
+  setButtonLabel(batchExportBtn, tx.batchExport, "download", { iconOnly: true });
+  setButtonLabel(batchExitBtn, tx.batchExit, "close", { iconOnly: true });
   setButtonLabel(immersiveBtn, state.immersive ? tx.exitImmersive : tx.immersive, state.immersive ? "close" : "fullscreen", { iconOnly: true });
   setButtonLabel(modalSlideshow, labelText("slideshowFullscreen", "Slideshow (Fullscreen)", "幻灯片（全屏）"), "slideshow", { iconOnly: true });
   setButtonLabel(modalMoveReview, tx.moveReview, "star", { iconOnly: true });
   setButtonLabel(modalMoveTrash, tx.moveTrash, "trash", { iconOnly: true });
   setButtonLabel(modalOpenFolder, tx.showInFolder, "folder", { iconOnly: true });
-  setButtonLabel(modalImageUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff", { iconOnly: true });
-  setButtonLabel(modalVideoUiToggle, labelText("hideUi", "Hide UI", "隐藏控制"), "eyeOff", { iconOnly: true });
+  modalImageUiToggle.classList.add("hidden");
+  modalVideoUiToggle.classList.add("hidden");
   setButtonLabel(modalUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
   setButtonLabel(modalClose, tx.close, "close", { iconOnly: true });
   updateVideoModeUI();
@@ -654,7 +738,7 @@ function applyActionButtons() {
   setButtonLabel(slideshowNext, tx.next, "right", { iconOnly: true });
   setButtonLabel(slideshowMoveTrash, tx.moveTrash, "trash", { iconOnly: true });
   setButtonLabel(slideshowPlay, state.slideshowPlaying ? tx.pause : tx.play, state.slideshowPlaying ? "pause" : "play", { iconOnly: true });
-  setButtonLabel(slideshowUiToggle, compactText("hideUi", "Hide"), "eyeOff", { iconOnly: true });
+  slideshowUiToggle.classList.add("hidden");
   setButtonLabel(slideshowUiShow, labelText("showUi", "Show UI", "显示控制"), "eye", { iconOnly: true });
   setButtonLabel(slideshowClose, tx.close, "close", { iconOnly: true });
   document.querySelectorAll(".tiny-btn").forEach(btn => setButtonLabel(btn, tx.location, "folder", { iconOnly: true }));
@@ -717,10 +801,6 @@ function applyLanguage() {
   excludeRulesCancel.textContent = tx.excludeCancel;
   excludeRulesClose.textContent = tx.close;
   searchInput.placeholder = tx.search;
-  reviewFilterSeg.title = tx.reviewTitle;
-  reviewFilterSeg.querySelector('[data-review-filter="all"]').textContent = tx.all;
-  reviewFilterSeg.querySelector('[data-review-filter="favorites"]').textContent = tx.favorites;
-  reviewFilterSeg.querySelector('[data-review-filter="selected"]').textContent = tx.selected;
   sizeFilterSelect.title = tx.sizeFilterTitle;
   sizeFilterSelect.querySelector('[value="all"]').textContent = tx.anySize;
   sizeFilterSelect.querySelector('[value="small"]').textContent = tx.smallFiles;
@@ -731,13 +811,15 @@ function applyLanguage() {
   dateFilterSelect.querySelector('[value="day"]').textContent = tx.lastDay;
   dateFilterSelect.querySelector('[value="week"]').textContent = tx.lastWeek;
   dateFilterSelect.querySelector('[value="month"]').textContent = tx.lastMonth;
-  mediaTypeSelect.title = tx.mediaTypeTitle;
-  mediaTypeSelect.querySelector('[value="all"]').textContent = tx.allMedia;
-  mediaTypeSelect.querySelector('[value="video"]').textContent = tx.videosOnly;
-  mediaTypeSelect.querySelector('[value="image"]').textContent = tx.imagesOnly;
+  mediaFilterSeg.title = tx.mediaTypeTitle;
+  mediaFilterSeg.querySelector('[data-media-filter="all"]').textContent = tx.allMedia;
+  mediaFilterSeg.querySelector('[data-media-filter="video"]').textContent = tx.videosOnly;
+  mediaFilterSeg.querySelector('[data-media-filter="image"]').textContent = tx.imagesOnly;
+  mediaFilterSeg.querySelector('[data-media-filter="favorites"]').textContent = tx.favorites;
   sortSelect.title = tx.sortTitle;
   columnsSelect.title = tx.columnsTitle;
-  playLimitSelect.title = tx.playLimitTitle;
+  pageSizeInput.title = tx.pageSizeTitle;
+  $("#pageSizeLabel").textContent = tx.pageSizeLabelText;
   $("#wallAutoplayLabel").textContent = tx.wallAutoplay;
   $("#previewLargeVideosLabel").textContent = tx.previewLargeVideos;
   $("#pauseWhenInactiveLabel").textContent = tx.pauseWhenInactive;
@@ -794,10 +876,8 @@ function applyLanguage() {
   [...columnsSelect.options].forEach(opt => {
     opt.textContent = tx.colLabel(opt.value);
   });
-  [...playLimitSelect.options].forEach(opt => {
-    opt.textContent = tx.playLabel(opt.value);
-  });
-  updateReviewFilterUI();
+  pageSizeInput.setAttribute("aria-label", tx.pageSizeTitle);
+  updateMediaFilterUI();
   document.querySelectorAll(".tiny-btn").forEach(btn => btn.textContent = tx.location);
   applyTheme();
   applyActionButtons();
@@ -806,20 +886,29 @@ function applyLanguage() {
   updateGridPager();
   updateExcludeRulesSummary();
   if (!excludeRulesDialog.classList.contains("hidden")) renderExcludeRulesDraft();
+  if (state.currentModalItem) renderModalMetadata(state.currentModalItem);
 }
 
 function applyLayout() {
   const cols = Number(state.columns) || 6;
-  const width = COLUMN_WIDTHS[cols] || 220;
   const gap = COLUMN_GAPS[cols] || 18;
+  const contentWidth = getContentWidthRule();
   document.documentElement.style.setProperty("--columns", cols);
-  document.documentElement.style.setProperty("--card-w", `${width}px`);
   document.documentElement.style.setProperty("--gap", `${gap}px`);
+  document.documentElement.style.setProperty("--content-width", contentWidth);
   document.body.classList.toggle("dense-grid", cols >= 12);
   columnsSelect.value = String(cols);
-  playLimitSelect.value = String(state.playLimit);
+  pageSizeInput.value = String(state.pageSize);
   updateSubInfo();
   scheduleUpdatePlaying();
+}
+
+function getContentWidthRule() {
+  if (document.body.classList.contains("sidebar-open")) return "calc(100% - 24px)";
+  const width = window.innerWidth || 1600;
+  if (width >= 2400) return "75vw";
+  if (width >= 1600) return "86vw";
+  return "calc(100% - 24px)";
 }
 
 function setSettingsMenuOpen(open) {
@@ -952,12 +1041,11 @@ function updateSubInfo() {
   }
   subInfo.classList.remove("hidden");
   const favCount = state.all.filter(item => item.favorite).length;
-  const selectedCount = state.all.filter(item => item.selected).length;
   const pages = gridPageCount();
   const pageText = pages > 1 ? ` · ${t().pageStatus(state.gridPage + 1, pages)}` : "";
   const excludedText = state.lastExcludedCount > 0 ? ` · ${state.lastExcludedCount} ${state.language === "zh" ? "项已排除" : "excluded"}` : "";
   const perfText = state.perf ? ` · ${tx.perfInfo(state.perf)}` : "";
-  subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items}${pageText} · ${tx.favorites} ${favCount} · ${tx.selected} ${selectedCount}${excludedText}${perfText}`;
+  subInfo.textContent = `${state.view.length} / ${state.all.length} ${tx.items}${pageText} · ${tx.favorites} ${favCount}${excludedText}${perfText}`;
 }
 
 function sortItems(items, mode) {
@@ -986,8 +1074,7 @@ function applyFilters(resetPage = true) {
   const q = searchInput.value.trim().toLowerCase();
   let items = state.all;
   if (q) items = items.filter(v => v.name.toLowerCase().includes(q) || v.rel.toLowerCase().includes(q));
-  if (state.reviewFilter === "favorites") items = items.filter(v => v.favorite);
-  if (state.reviewFilter === "selected") items = items.filter(v => v.selected);
+  if (state.mediaType === "favorites") items = items.filter(v => v.favorite);
   if (state.sizeFilter === "small") items = items.filter(v => Number(v.size_mb) < 10);
   if (state.sizeFilter === "medium") items = items.filter(v => Number(v.size_mb) >= 10 && Number(v.size_mb) < 50);
   if (state.sizeFilter === "large") items = items.filter(v => Number(v.size_mb) >= 50);
@@ -995,21 +1082,34 @@ function applyFilters(resetPage = true) {
   if (state.dateFilter === "day") items = items.filter(v => now - Number(v.mtime) <= 86400);
   if (state.dateFilter === "week") items = items.filter(v => now - Number(v.mtime) <= 86400 * 7);
   if (state.dateFilter === "month") items = items.filter(v => now - Number(v.mtime) <= 86400 * 30);
-  if (state.mediaType !== "all") items = items.filter(v => v.type === state.mediaType);
+  if (state.mediaType !== "all" && state.mediaType !== "favorites") items = items.filter(v => v.type === state.mediaType);
   state.view = sortItems(items, sortSelect.value);
   if (resetPage) state.gridPage = 0;
   renderGrid();
   saveSettingsSoft();
 }
 
+function resetFilters() {
+  searchInput.value = "";
+  state.reviewFilter = "all";
+  state.sizeFilter = "all";
+  state.dateFilter = "all";
+  state.mediaType = "all";
+  sizeFilterSelect.value = "all";
+  dateFilterSelect.value = "all";
+  updateMediaFilterUI();
+  applyFilters();
+  showToast(t().filtersReset);
+}
+
 function gridPageCount() {
-  return Math.max(1, Math.ceil(state.view.length / GRID_PAGE_SIZE));
+  return Math.max(1, Math.ceil(state.view.length / state.pageSize));
 }
 
 function updateGridPager() {
   const pages = gridPageCount();
   state.gridPage = Math.max(0, Math.min(state.gridPage, pages - 1));
-  const show = state.view.length > GRID_PAGE_SIZE;
+  const show = state.view.length > state.pageSize;
   gridPager.classList.toggle("hidden", !show);
   gridPagePrev.disabled = state.gridPage <= 0;
   gridPageNext.disabled = state.gridPage >= pages - 1;
@@ -1025,6 +1125,21 @@ function setGridPage(page) {
   document.getElementById("mainArea")?.scrollIntoView({ block: "start" });
 }
 
+function renderEmptyState() {
+  if (!state.scannedPath) {
+    emptyState.classList.add("hidden");
+    emptyState.innerHTML = "";
+    return;
+  }
+  const tx = t();
+  const filtered = state.all.length > 0;
+  emptyState.innerHTML = `
+    <h2>${escapeHtml(filtered ? tx.noMatchTitle : tx.noMediaTitle)}</h2>
+    <p>${escapeHtml(filtered ? tx.noMatchBody : tx.noMediaBody)}</p>
+  `;
+  emptyState.classList.remove("hidden");
+}
+
 function renderGrid() {
   const renderStart = performance.now();
   destroyObservers();
@@ -1037,11 +1152,12 @@ function renderGrid() {
     state.perf.renderMs = Math.round(performance.now() - renderStart);
     updateGridPager();
     updateSubInfo();
+    renderEmptyState();
     return;
   }
   const frag = document.createDocumentFragment();
-  const pageStart = state.gridPage * GRID_PAGE_SIZE;
-  const pageItems = state.view.slice(pageStart, pageStart + GRID_PAGE_SIZE);
+  const pageStart = state.gridPage * state.pageSize;
+  const pageItems = state.view.slice(pageStart, pageStart + state.pageSize);
   state.perf.pageItems = pageItems.length;
   for (const item of pageItems) {
     const card = document.createElement("article");
@@ -1060,6 +1176,10 @@ function renderGrid() {
     card.innerHTML = `
       <div class="video-wrap" title="${escapeHtml(item.name)}">
         ${mediaHtml}
+        <div class="card-quick-actions">
+          <button class="review-btn card-favorite-btn" data-review-field="favorite"></button>
+          <button class="batch-select-btn" data-batch-select="${escapeHtml(item.key)}"></button>
+        </div>
         <div class="video-overlay"><div class="video-name">${escapeHtml(item.name)}</div></div>
       </div>
       <div class="card-footer">
@@ -1068,14 +1188,16 @@ function renderGrid() {
           <div>${fmtBytes(item.size_mb)} · ${escapeHtml(item.mtime_text)}</div>
         </div>
         <button class="tiny-btn" data-open="${escapeHtml(item.rel)}">${t().location}</button>
-      </div>
-      <div class="review-actions">
-        <button class="review-btn" data-review-field="favorite"></button>
-        <button class="review-btn" data-review-field="selected"></button>
       </div>`;
     card.classList.toggle("is-favorite", !!item.favorite);
-    card.classList.toggle("is-selected", !!item.selected);
-    card.querySelector(".video-wrap").addEventListener("click", () => openModal(item));
+    card.classList.toggle("is-batch-selected", state.batchSelected.has(item.key));
+    card.querySelector(".video-wrap").addEventListener("click", () => {
+      if (state.batchMode) {
+        toggleBatchItem(item.key);
+        return;
+      }
+      openModal(item);
+    });
     card.querySelector(".tiny-btn").addEventListener("click", e => {
       e.stopPropagation();
       openInExplorer(item);
@@ -1085,6 +1207,10 @@ function renderGrid() {
         e.stopPropagation();
         toggleReview(item, btn.dataset.reviewField);
       });
+    });
+    card.querySelector(".batch-select-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      toggleBatchItem(item.key);
     });
     frag.appendChild(card);
   }
@@ -1103,22 +1229,131 @@ function updateReviewButtons() {
     const item = state.all.find(v => v.key === card.dataset.key);
     if (!item) return;
     const favoriteBtn = card.querySelector('[data-review-field="favorite"]');
-    const selectedBtn = card.querySelector('[data-review-field="selected"]');
+    const batchBtn = card.querySelector("[data-batch-select]");
     if (favoriteBtn) {
       setButtonLabel(favoriteBtn, item.favorite ? tx.favorited : tx.favorite, "star", { iconOnly: true });
       favoriteBtn.classList.toggle("active", !!item.favorite);
     }
-    if (selectedBtn) {
-      setButtonLabel(selectedBtn, item.selected ? tx.selectedMarked : tx.markSelected, "check", { iconOnly: true });
-      selectedBtn.classList.toggle("active", !!item.selected);
+    if (batchBtn) {
+      setButtonLabel(batchBtn, state.batchSelected.has(item.key) ? tx.batchSelectedItem : tx.batchSelectItem, "check", { iconOnly: true });
+      batchBtn.classList.toggle("active", state.batchSelected.has(item.key));
     }
+  });
+  updateBatchUI();
+}
+
+function updateMediaFilterUI() {
+  if (state.reviewFilter === "selected") state.reviewFilter = "all";
+  if (!["all", "video", "image", "favorites"].includes(state.mediaType)) state.mediaType = "all";
+  mediaFilterSeg.querySelectorAll("button[data-media-filter]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mediaFilter === state.mediaType);
   });
 }
 
-function updateReviewFilterUI() {
-  reviewFilterSeg.querySelectorAll("button[data-review-filter]").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.reviewFilter === state.reviewFilter);
-  });
+function currentPageItems() {
+  const pageStart = state.gridPage * state.pageSize;
+  return state.view.slice(pageStart, pageStart + state.pageSize);
+}
+
+function selectedBatchItems() {
+  return state.all.filter(item => state.batchSelected.has(item.key));
+}
+
+function setBatchMode(enabled) {
+  state.batchMode = !!enabled;
+  document.body.classList.toggle("batch-mode", state.batchMode);
+  if (!state.batchMode) state.batchSelected.clear();
+  updateBatchUI();
+  updateReviewButtons();
+  applyActionButtons();
+}
+
+function updateBatchUI() {
+  const count = state.batchSelected.size;
+  batchBar.classList.toggle("hidden", !state.batchMode);
+  batchInfo.textContent = t().batchInfo(count);
+  batchToggleBtn.classList.toggle("active", state.batchMode);
+  batchSelectPageBtn.disabled = !state.batchMode || !state.view.length;
+  batchClearBtn.disabled = !count;
+  batchFavoriteBtn.disabled = !count;
+  batchUnfavoriteBtn.disabled = !count;
+  batchTrashBtn.disabled = !count;
+  batchExportBtn.disabled = !count;
+}
+
+function toggleBatchItem(key) {
+  if (!state.batchMode) return;
+  if (state.batchSelected.has(key)) state.batchSelected.delete(key);
+  else state.batchSelected.add(key);
+  updateReviewButtons();
+}
+
+function selectCurrentPageForBatch() {
+  if (!state.batchMode) setBatchMode(true);
+  currentPageItems().forEach(item => state.batchSelected.add(item.key));
+  updateReviewButtons();
+}
+
+function clearBatchSelection() {
+  state.batchSelected.clear();
+  updateReviewButtons();
+}
+
+async function setBatchFavorite(value) {
+  const items = selectedBatchItems();
+  if (!items.length) {
+    showToast(t().batchNoSelection);
+    return;
+  }
+  let done = 0;
+  for (const item of items) {
+    try {
+      const res = await fetch("/api/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: item.key, favorite: value }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || t().reviewFail);
+      item.favorite = !!data.review.favorite;
+      state.all = state.all.map(v => v.key === item.key ? { ...v, favorite: item.favorite } : v);
+      state.view = state.view.map(v => v.key === item.key ? { ...v, favorite: item.favorite } : v);
+      done += 1;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  applyFilters(false);
+  showToast(t().batchDone(done));
+}
+
+async function moveBatchToTrash() {
+  const items = selectedBatchItems();
+  if (!items.length) {
+    showToast(t().batchNoSelection);
+    return;
+  }
+  if (state.confirmTrash && !window.confirm(t().batchTrashConfirm(items.length))) return;
+  let done = 0;
+  for (const item of items) {
+    try {
+      const res = await fetch("/api/file-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "move_trash", rel: item.rel, scan_id: item.scan_id || state.scanId || "", confirm: true }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || t().fileActionFail);
+      state.batchSelected.delete(item.key);
+      state.all = state.all.filter(v => v.key !== item.key);
+      state.view = state.view.filter(v => v.key !== item.key);
+      done += 1;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  applyFilters(false);
+  showToast(t().batchDone(done));
 }
 
 async function toggleReview(item, field) {
@@ -1150,13 +1385,13 @@ function csvEscape(value) {
   return text;
 }
 
-function exportCsv() {
-  if (!state.view.length) {
+function exportCsv(items = state.view, prefix = "video-wall-export") {
+  if (!items.length) {
     showToast(t().exportEmpty);
     return;
   }
   const headers = ["name", "type", "relative_path", "size_mb", "favorite", "selected"];
-  const rows = state.view.map(item => [
+  const rows = items.map(item => [
     item.name,
     item.type || "video",
     item.full_path || item.key || item.rel,
@@ -1170,12 +1405,21 @@ function exportCsv() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `video-wall-export-${stamp}.csv`;
+  a.download = `${prefix}-${stamp}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
   showToast(t().exportDone(rows.length));
+}
+
+function exportBatchCsv() {
+  const items = selectedBatchItems();
+  if (!items.length) {
+    showToast(t().batchNoSelection);
+    return;
+  }
+  exportCsv(items, "video-wall-batch-export");
 }
 
 let loadObserver = null;
@@ -1284,6 +1528,14 @@ function distanceToViewportCenter(el) {
   return Math.hypot((r.left + r.width / 2) - window.innerWidth / 2, (r.top + r.height / 2) - window.innerHeight / 2);
 }
 
+function effectiveWallPlayLimit() {
+  return state.columns >= 10 ? 0 : state.columns * 2;
+}
+
+function isWallPreviewStatic() {
+  return !state.wallAutoplay || effectiveWallPlayLimit() <= 0;
+}
+
 function scheduleUpdatePlaying() {
   if (state.updateTimer) return;
   state.updateTimer = requestAnimationFrame(() => {
@@ -1294,11 +1546,12 @@ function scheduleUpdatePlaying() {
 
 function updatePlaying() {
   const videos = [...state.visibleVideos].filter(v => v.isConnected && isActuallyVisible(v));
-  const selected = videos.sort((a, b) => distanceToViewportCenter(a) - distanceToViewportCenter(b)).slice(0, state.playLimit);
+  const playLimit = effectiveWallPlayLimit();
+  const selected = videos.sort((a, b) => distanceToViewportCenter(a) - distanceToViewportCenter(b)).slice(0, playLimit);
   const selectedSet = new Set(selected);
   for (const video of videos) {
     const card = video.closest(".video-card");
-    if (!state.wallAutoplay && state.playingEnabled && modal.classList.contains("hidden")) {
+    if (isWallPreviewStatic() && state.playingEnabled && modal.classList.contains("hidden")) {
       ensureSrc(video);
       video.pause();
       card?.classList.remove("paused-by-limit");
@@ -1351,7 +1604,7 @@ function pauseActiveViewForInactive() {
 function resumeActiveViewAfterInactive() {
   if (!state.pausedForInactive) return;
   state.pausedForInactive = false;
-  if (state.wallAutoplay && state.playingEnabled && modal.classList.contains("hidden")) {
+  if (!isWallPreviewStatic() && state.playingEnabled && modal.classList.contains("hidden")) {
     resumeVisibleInline();
   }
   if (state.wasModalVideoPlayingBeforeHidden && !modal.classList.contains("hidden")) {
@@ -1389,6 +1642,36 @@ function updateModalNav() {
   modalNext.classList.toggle("hidden", !canNavigate);
 }
 
+function renderMetadataBlock(title, value, options = {}) {
+  const safeValue = String(value || "").trim();
+  if (!safeValue && options.hideEmpty) return "";
+  const body = safeValue || t().metadataPending;
+  const copy = safeValue
+    ? `<button class="metadata-copy" type="button" data-copy-meta="${escapeHtml(safeValue)}">${escapeHtml(t().copy)}</button>`
+    : "";
+  return `
+    <section class="metadata-block">
+      <div class="metadata-block-head"><strong>${escapeHtml(title)}</strong>${copy}</div>
+      <p>${escapeHtml(body)}</p>
+    </section>`;
+}
+
+function renderModalMetadata(item) {
+  const tx = t();
+  const basic = `${item.type || "media"} · ${fmtBytes(item.size_mb)} · ${item.mtime_text}`;
+  modalMetadata.innerHTML = `
+    <div class="metadata-title">${escapeHtml(tx.metadataTitle)}</div>
+    <p class="metadata-note">${escapeHtml(tx.metadataPending)}</p>
+    ${renderMetadataBlock(tx.metadataModel, "", { hideEmpty: true })}
+    ${renderMetadataBlock(tx.metadataLora, "", { hideEmpty: true })}
+    ${renderMetadataBlock(tx.metadataPrompt, "", { hideEmpty: true })}
+    ${renderMetadataBlock(tx.metadataNegative, "", { hideEmpty: true })}
+    ${renderMetadataBlock(tx.metadataSource, item.full_path || item.rel || item.url)}
+    ${renderMetadataBlock(tx.metadataBasic, basic)}
+  `;
+  modalMetadata.classList.toggle("hidden", item.type !== "image");
+}
+
 function renderModalItem(item) {
   state.currentModalItem = item;
   modalName.textContent = item.name;
@@ -1399,7 +1682,8 @@ function renderModalItem(item) {
   modalVideo.classList.toggle("hidden", item.type === "image");
   modalImage.classList.toggle("hidden", item.type !== "image");
   modalSlideshow.classList.toggle("hidden", item.type !== "image");
-  modalImageUiToggle.classList.toggle("hidden", item.type !== "image");
+  modalImageUiToggle.classList.add("hidden");
+  modalVideoUiToggle.classList.add("hidden");
   modalVideoControls.classList.toggle("hidden", item.type !== "video");
   modalContent.classList.toggle("is-video", item.type === "video");
   if (item.type === "image") {
@@ -1410,13 +1694,16 @@ function renderModalItem(item) {
     modalVideo.muted = false;
     updateVideoModeUI();
   }
+  renderModalMetadata(item);
   updateModalNav();
 }
 
 function openModal(item) {
+  pauseAllInline();
   renderModalItem(item);
   setModalControlsHidden(false);
   modal.classList.remove("hidden");
+  scheduleAutoHideControls("modal", item.type === "video" ? 2000 : 1500, true);
   pauseAllInline();
   if (item.type !== "image") playModalVideoSoon();
 }
@@ -1424,10 +1711,13 @@ function openModal(item) {
 function closeModal() {
   if (isModalFullscreen()) document.exitFullscreen?.();
   clearTimeout(state.mediaNavTimer);
+  clearTimeout(state.modalToolbarTimer);
+  state.modalToolbarTimer = null;
   releaseMediaElement(modalVideo);
   releaseMediaElement(modalImage);
   modalSlideshow.classList.add("hidden");
   modalImageUiToggle.classList.add("hidden");
+  modalMetadata.classList.add("hidden");
   modalVideoControls.classList.add("hidden");
   modalContent.classList.remove("is-video", "controls-hidden", "nav-active");
   state.modalControlsHidden = false;
@@ -1486,6 +1776,18 @@ function adjustModalVideoVolume(delta) {
   modalVideo.volume = next;
   if (next > 0) modalVideo.muted = false;
   showToast(`${t().volumeLabel} ${Math.round(next * 100)}%`, 900);
+}
+
+function getWheelJump(kind) {
+  const now = Date.now();
+  const timeKey = kind === "slideshow" ? "slideshowWheelTime" : "modalWheelTime";
+  const burstKey = kind === "slideshow" ? "slideshowWheelBurst" : "modalWheelBurst";
+  const gap = now - state[timeKey];
+  state[burstKey] = gap < 220 ? state[burstKey] + 1 : 1;
+  state[timeKey] = now;
+  if (gap < 90 && state[burstKey] >= 5) return 5;
+  if (gap < 180 && state[burstKey] >= 3) return 3;
+  return 1;
 }
 
 function resolveSlideshowEffect() {
@@ -1597,6 +1899,7 @@ function openSlideshowFromCurrent() {
   applyLanguage();
   renderSlideshow(1);
   applyActionButtons();
+  scheduleAutoHideControls("slideshow", 1000, true);
 }
 
 function closeSlideshow(options = {}) {
@@ -1605,6 +1908,8 @@ function closeSlideshow(options = {}) {
   clearTimeout(state.slideshowTimer);
   clearTimeout(state.slideshowCleanupTimer);
   clearTimeout(state.mediaNavTimer);
+  clearTimeout(state.slideshowToolbarTimer);
+  state.slideshowToolbarTimer = null;
   setSlideshowControlsHidden(false);
   slideshowHiddenActions.classList.add("hidden");
   slideshowExitFullscreen.classList.add("hidden");
@@ -1617,6 +1922,7 @@ function closeSlideshow(options = {}) {
 
 function returnSlideshowToModal() {
   const item = state.slideshowItems[state.slideshowIndex];
+  state.slideshowReturnAfterFullscreenExit = false;
   closeSlideshow({ resumeInline: false });
   if (item) openModal(item);
 }
@@ -1624,7 +1930,7 @@ function returnSlideshowToModal() {
 function setSlideshowControlsHidden(hidden) {
   state.slideshowControlsHidden = hidden;
   slideshow.classList.toggle("controls-hidden", hidden);
-  slideshowHiddenActions.classList.toggle("hidden", !hidden);
+  slideshowHiddenActions.classList.add("hidden");
   slideshowUiToggle.textContent = compactText("hideUi", "Hide");
   slideshowUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
   if (hidden) {
@@ -1636,7 +1942,7 @@ function setSlideshowControlsHidden(hidden) {
 function setModalControlsHidden(hidden) {
   state.modalControlsHidden = hidden;
   modalContent.classList.toggle("controls-hidden", hidden);
-  modalHiddenActions.classList.toggle("hidden", !hidden);
+  modalHiddenActions.classList.add("hidden");
   modalImageUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
   modalVideoUiToggle.textContent = labelText("hideUi", "Hide UI", "隐藏控制");
   modalUiShow.textContent = labelText("showUi", "Show UI", "显示控制");
@@ -1644,6 +1950,46 @@ function setModalControlsHidden(hidden) {
     modalContent.classList.remove("nav-active");
   }
   applyActionButtons();
+}
+
+function isInTopRightHotspot(event, root) {
+  const rect = root.getBoundingClientRect();
+  const width = Math.min(520, Math.max(360, rect.width * 0.24));
+  const height = Math.min(140, Math.max(96, rect.height * 0.14));
+  return event.clientX >= rect.right - width && event.clientY <= rect.top + height;
+}
+
+function scheduleAutoHideControls(kind, delay = 1200, reset = false) {
+  const timerKey = kind === "slideshow" ? "slideshowToolbarTimer" : "modalToolbarTimer";
+  if (reset) {
+    clearTimeout(state[timerKey]);
+    state[timerKey] = null;
+  }
+  if (state[timerKey]) return;
+  state[timerKey] = setTimeout(() => {
+    if (kind === "slideshow" && !slideshow.classList.contains("hidden")) setSlideshowControlsHidden(true);
+    if (kind === "modal" && !modal.classList.contains("hidden")) setModalControlsHidden(true);
+    state[timerKey] = null;
+  }, delay);
+}
+
+function handleAutoControls(kind, event) {
+  const root = kind === "slideshow" ? slideshow : modalContent;
+  const toolbarSelector = kind === "slideshow"
+    ? ".slideshow-top, .slideshow-controls, .slideshow-hidden-actions"
+    : ".modal-header, .modal-actions, .modal-hidden-actions";
+  const timerKey = kind === "slideshow" ? "slideshowToolbarTimer" : "modalToolbarTimer";
+  if (isInTopRightHotspot(event, root) || event.target.closest(toolbarSelector)) {
+    clearTimeout(state[timerKey]);
+    state[timerKey] = null;
+    if (kind === "slideshow") {
+      if (state.slideshowControlsHidden) setSlideshowControlsHidden(false);
+    } else if (state.modalControlsHidden) {
+      setModalControlsHidden(false);
+    }
+    return;
+  }
+  scheduleAutoHideControls(kind);
 }
 
 function pulseMediaNav(container) {
@@ -1665,9 +2011,18 @@ function toggleModalFullscreen() {
 
 function toggleSlideshowFullscreen() {
   if (isSlideshowFullscreen()) {
+    state.slideshowReturnAfterFullscreenExit = false;
     document.exitFullscreen?.();
   } else {
+    state.slideshowReturnAfterFullscreenExit = true;
     slideshow.requestFullscreen?.().catch(() => {});
+  }
+}
+
+function handleFullscreenChange() {
+  updateFullscreenLabels();
+  if (!document.fullscreenElement && state.slideshowReturnAfterFullscreenExit && !slideshow.classList.contains("hidden")) {
+    returnSlideshowToModal();
   }
 }
 
@@ -1718,6 +2073,16 @@ function removeItemFromState(item) {
   applyFilters(false);
 }
 
+function releaseActionPreviewMedia(source) {
+  if (source === "slideshow") {
+    releaseMediaElement(slideshowImageA);
+    releaseMediaElement(slideshowImageB);
+    return;
+  }
+  releaseMediaElement(modalVideo);
+  releaseMediaElement(modalImage);
+}
+
 function continueAfterFileAction(item, source, oldIndex) {
   if (source === "slideshow") {
     state.slideshowItems = currentImageItems();
@@ -1756,12 +2121,13 @@ async function runFileAction(action, item = state.currentModalItem, source = "mo
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || t().fileActionFail);
+    releaseActionPreviewMedia(source);
     removeItemFromState(item);
     continueAfterFileAction(item, source, oldIndex);
     showToast(t().fileActionDone, 3600);
   } catch (err) {
     console.error(err);
-    showToast(t().fileActionFail, 4200);
+    showToast(err.message || t().fileActionFail, 5200);
   }
 }
 
@@ -1966,10 +2332,12 @@ function renderHistoryMenu() {
       remove.className = "path-history-remove";
       remove.type = "button";
       remove.innerHTML = ICONS.close;
+      remove.dataset.historyRemove = path;
       remove.title = t().removeHistory;
       remove.setAttribute("aria-label", t().removeHistory);
       remove.addEventListener("click", e => {
         e.stopPropagation();
+        e.preventDefault();
         removePathHistory(path);
       });
       row.append(item, remove);
@@ -2008,6 +2376,7 @@ function updateFavoritePathButton() {
 async function openFolderPanel() {
   folderPanel.classList.remove("hidden");
   document.body.classList.add("sidebar-open");
+  applyLayout();
   renderPathPanel();
   if (!state.folderRootsLoaded) await loadFolderRoots();
 }
@@ -2015,6 +2384,7 @@ async function openFolderPanel() {
 function closeFolderPanel() {
   folderPanel.classList.add("hidden");
   document.body.classList.remove("sidebar-open");
+  applyLayout();
 }
 
 async function loadFolderRoots(force = false) {
@@ -2149,6 +2519,7 @@ async function removePathHistory(path) {
     state.pathHistory = data.config?.path_history || [];
     state.pathFavorites = data.config?.path_favorites || state.pathFavorites;
     renderPathPanel();
+    renderHistoryMenu();
     showToast(t().historyRemoved, 1800);
   } catch (err) {
     console.error(err);
@@ -2200,6 +2571,7 @@ async function scanNow() {
       filename_exclude_keywords: state.filenameExcludeKeywords,
       filename_exclude_scope: state.filenameExcludeScope,
       columns: state.columns,
+      page_size: state.pageSize,
       play_limit: state.playLimit,
       wall_autoplay: state.wallAutoplay,
       preview_large_videos: state.previewLargeVideos,
@@ -2242,7 +2614,7 @@ async function scanNow() {
     state.mediaType = "all";
     sizeFilterSelect.value = "all";
     dateFilterSelect.value = "all";
-    mediaTypeSelect.value = "all";
+    updateMediaFilterUI();
     if (state.all.length === 0) {
       showToast(t().noVideosTitle, 3200);
     }
@@ -2272,6 +2644,7 @@ async function saveSettingsSoft() {
         filename_exclude_keywords: state.filenameExcludeKeywords,
         filename_exclude_scope: state.filenameExcludeScope,
         columns: state.columns,
+        page_size: state.pageSize,
         play_limit: state.playLimit,
         wall_autoplay: state.wallAutoplay,
         preview_large_videos: state.previewLargeVideos,
@@ -2299,20 +2672,31 @@ async function saveSettingsSoft() {
 function setColumns(cols) {
   const next = Number(cols) || 6;
   state.columns = COLUMN_OPTIONS.includes(next) ? next : 6;
+  state.playLimit = effectiveWallPlayLimit();
   applyLayout();
+  if (isWallPreviewStatic()) pauseAllInline();
+  else resumeVisibleInline();
   saveSettingsSoft();
 }
 
-function setPlayLimit(limit) {
-  state.playLimit = Math.max(6, Math.min(30, Number(limit) || 24));
+function normalizePageSize(size) {
+  const next = Math.floor(Number(size) || 120);
+  return Math.max(1, Math.min(240, next));
+}
+
+function setPageSize(size) {
+  state.pageSize = normalizePageSize(size);
+  pageSizeInput.value = String(state.pageSize);
+  state.gridPage = 0;
   applyLayout();
+  renderGrid();
   saveSettingsSoft();
 }
 
 function setWallAutoplay(enabled, save = true) {
   state.wallAutoplay = !!enabled;
   wallAutoplay.checked = state.wallAutoplay;
-  if (state.wallAutoplay && state.playingEnabled) {
+  if (!isWallPreviewStatic() && state.playingEnabled) {
     resumeVisibleInline();
   } else {
     pauseAllInline();
@@ -2383,8 +2767,8 @@ async function init() {
     const cfg = data.config || {};
     const cfgColumns = Number(cfg.columns || 6);
     state.columns = COLUMN_OPTIONS.includes(cfgColumns) ? cfgColumns : 6;
-    state.playLimit = Number(cfg.play_limit || 24);
-    state.playLimit = Math.max(6, Math.min(30, state.playLimit));
+    state.pageSize = normalizePageSize(cfg.page_size || 120);
+    state.playLimit = effectiveWallPlayLimit();
     state.wallAutoplay = cfg.wall_autoplay !== false;
     state.previewLargeVideos = cfg.preview_large_videos === true;
     state.pauseWhenInactive = cfg.pause_when_inactive === true;
@@ -2408,9 +2792,7 @@ async function init() {
       localFontSize = localStorage.getItem("localVideoWallFontSize") || "";
     } catch {}
     state.theme = (localTheme || cfg.theme) === "light" ? "light" : "dark";
-    state.fontSize = ["small", "standard", "large"].includes(localFontSize || cfg.font_size)
-      ? (localFontSize || cfg.font_size)
-      : "standard";
+    state.fontSize = ["small", "standard", "large"].includes(localFontSize || cfg.font_size) ? (localFontSize || cfg.font_size) : "small";
     state.buttonStyle = (localButtonStyle || cfg.button_style) === "icons" ? "icons" : "text";
     state.slideshowInterval = Math.max(1, Math.min(15, Number(cfg.slideshow_interval || 5)));
     state.slideshowEffect = ["none", "fade", "slide", "drift", "random"].includes(cfg.slideshow_effect) ? cfg.slideshow_effect : "drift";
@@ -2424,7 +2806,7 @@ async function init() {
     pauseWhenInactive.checked = state.pauseWhenInactive;
     confirmTrash.checked = state.confirmTrash;
     sortSelect.value = state.sortMode;
-    playLimitSelect.value = String(state.playLimit);
+    pageSizeInput.value = String(state.pageSize);
     slideshowInterval.value = String(state.slideshowInterval);
     slideshowEffect.value = state.slideshowEffect;
     slideshowFit.value = state.slideshowFit;
@@ -2462,7 +2844,14 @@ pathHistoryToggle.addEventListener("click", e => {
   e.stopPropagation();
   toggleHistoryMenu();
 });
-pathHistoryMenu.addEventListener("click", e => e.stopPropagation());
+pathHistoryMenu.addEventListener("pointerdown", e => e.stopPropagation());
+pathHistoryMenu.addEventListener("click", e => {
+  e.stopPropagation();
+  const remove = e.target.closest("[data-history-remove]");
+  if (!remove) return;
+  e.preventDefault();
+  removePathHistory(remove.dataset.historyRemove || "");
+});
 pathSuggestMenu.addEventListener("click", e => e.stopPropagation());
 chooseFolderBtn.addEventListener("click", chooseFolder);
 scanBtn.addEventListener("click", scanNow);
@@ -2531,15 +2920,22 @@ pathInput.addEventListener("keydown", e => {
 });
 rememberPath.addEventListener("change", saveSettingsSoft);
 recursiveScan.addEventListener("change", saveSettingsSoft);
-reviewFilterSeg.addEventListener("click", e => {
-  const btn = e.target.closest("button[data-review-filter]");
+mediaFilterSeg.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-media-filter]");
   if (!btn) return;
-  state.reviewFilter = btn.dataset.reviewFilter;
-  updateReviewFilterUI();
+  state.reviewFilter = "all";
+  state.mediaType = btn.dataset.mediaFilter;
+  updateMediaFilterUI();
   applyFilters();
 });
 columnsSelect.addEventListener("change", () => setColumns(columnsSelect.value));
-playLimitSelect.addEventListener("change", () => setPlayLimit(playLimitSelect.value));
+pageSizeInput.addEventListener("change", () => setPageSize(pageSizeInput.value));
+pageSizeInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    pageSizeInput.blur();
+  }
+});
 wallAutoplay.addEventListener("change", () => setWallAutoplay(wallAutoplay.checked));
 previewLargeVideos.addEventListener("change", () => setPreviewLargeVideos(previewLargeVideos.checked));
 pauseWhenInactive.addEventListener("change", () => setPauseWhenInactive(pauseWhenInactive.checked));
@@ -2555,10 +2951,6 @@ dateFilterSelect.addEventListener("change", () => {
   state.dateFilter = dateFilterSelect.value;
   applyFilters();
 });
-mediaTypeSelect.addEventListener("change", () => {
-  state.mediaType = mediaTypeSelect.value;
-  applyFilters();
-});
 trashConfirmCancel.addEventListener("click", () => closeTrashConfirmDialog(false));
 trashConfirmOk.addEventListener("click", () => closeTrashConfirmDialog(true));
 trashConfirmDialog.addEventListener("click", e => {
@@ -2568,6 +2960,15 @@ clearHistoryBtn.addEventListener("click", clearPathHistory);
 gridPagePrev.addEventListener("click", () => setGridPage(state.gridPage - 1));
 gridPageNext.addEventListener("click", () => setGridPage(state.gridPage + 1));
 exportCsvBtn.addEventListener("click", exportCsv);
+resetFiltersBtn.addEventListener("click", resetFilters);
+batchToggleBtn.addEventListener("click", () => setBatchMode(!state.batchMode));
+batchSelectPageBtn.addEventListener("click", selectCurrentPageForBatch);
+batchClearBtn.addEventListener("click", clearBatchSelection);
+batchFavoriteBtn.addEventListener("click", () => setBatchFavorite(true));
+batchUnfavoriteBtn.addEventListener("click", () => setBatchFavorite(false));
+batchTrashBtn.addEventListener("click", moveBatchToTrash);
+batchExportBtn.addEventListener("click", exportBatchCsv);
+batchExitBtn.addEventListener("click", () => setBatchMode(false));
 pauseBtn.addEventListener("click", () => {
   state.playingEnabled = !state.playingEnabled;
   if (state.playingEnabled) {
@@ -2591,8 +2992,13 @@ modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", e => {
   if (e.target?.dataset?.close) closeModal();
 });
-modal.addEventListener("mousemove", () => {
-  if (!modal.classList.contains("hidden")) pulseMediaNav(modalContent);
+modal.addEventListener("mousemove", e => {
+  if (modal.classList.contains("hidden")) return;
+  pulseMediaNav(modalContent);
+  handleAutoControls("modal", e);
+});
+modal.addEventListener("mouseleave", () => {
+  if (!modal.classList.contains("hidden")) scheduleAutoHideControls("modal");
 });
 modal.addEventListener("wheel", e => {
   if (modal.classList.contains("hidden") || !state.currentModalItem) return;
@@ -2604,10 +3010,8 @@ modal.addEventListener("wheel", e => {
     return;
   }
   if (state.currentModalItem.type !== "image") return;
-  const now = Date.now();
-  if (now - state.modalWheelTime < 360) return;
-  state.modalWheelTime = now;
-  showModalImage(delta > 0 ? 1 : -1);
+  const jump = getWheelJump("modal");
+  showModalImage(delta > 0 ? jump : -jump);
 }, { passive: false });
 modalPrev.addEventListener("click", () => {
   if (state.currentModalItem?.type === "image") showModalImage(-1);
@@ -2637,13 +3041,28 @@ modalVideo.addEventListener("ended", () => {
 modalOpenFolder.addEventListener("click", () => {
   if (state.currentModalItem) openInExplorer(state.currentModalItem);
 });
+modalMetadata.addEventListener("click", async e => {
+  const btn = e.target.closest("[data-copy-meta]");
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(btn.dataset.copyMeta || "");
+    showToast(t().copied, 900);
+  } catch {
+    showToast(btn.dataset.copyMeta || "", 1800);
+  }
+});
 modalMoveReview.addEventListener("click", () => runFileAction("move_review"));
 modalMoveTrash.addEventListener("click", () => runFileAction("move_trash"));
 modalSlideshow.addEventListener("click", openSlideshowFromCurrent);
-slideshow.addEventListener("mousemove", () => {
-  if (!slideshow.classList.contains("hidden")) pulseMediaNav(slideshow);
+slideshow.addEventListener("mousemove", e => {
+  if (slideshow.classList.contains("hidden")) return;
+  pulseMediaNav(slideshow);
+  handleAutoControls("slideshow", e);
 });
-slideshowClose.addEventListener("click", closeSlideshow);
+slideshow.addEventListener("mouseleave", () => {
+  if (!slideshow.classList.contains("hidden")) scheduleAutoHideControls("slideshow");
+});
+slideshowClose.addEventListener("click", returnSlideshowToModal);
 slideshowPrev.addEventListener("click", () => showNextSlide(-1));
 slideshowNext.addEventListener("click", () => showNextSlide(1));
 slideshowMoveTrash.addEventListener("click", () => runFileAction("move_trash", state.slideshowItems[state.slideshowIndex], "slideshow"));
@@ -2661,10 +3080,8 @@ slideshow.addEventListener("wheel", e => {
   const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
   if (!delta) return;
   e.preventDefault();
-  const now = Date.now();
-  if (now - state.slideshowWheelTime < 320) return;
-  state.slideshowWheelTime = now;
-  showNextSlide(delta > 0 ? 1 : -1);
+  const jump = getWheelJump("slideshow");
+  showNextSlide(delta > 0 ? jump : -jump);
 }, { passive: false });
 slideshowInterval.addEventListener("change", () => {
   state.slideshowInterval = Math.max(1, Math.min(15, Number(slideshowInterval.value) || 5));
@@ -2713,14 +3130,16 @@ window.addEventListener("keydown", e => {
       runFileAction("move_trash", state.slideshowItems[state.slideshowIndex], "slideshow");
       return;
     }
-    if (e.key === "Escape") closeSlideshow();
+    if (e.key === "Escape") {
+      e.preventDefault();
+      returnSlideshowToModal();
+    }
     if (e.key === " ") {
       e.preventDefault();
       toggleSlideshowPlay();
     }
     if (e.key === "ArrowLeft") showNextSlide(-1);
     if (e.key === "ArrowRight") showNextSlide(1);
-    if (e.key.toLowerCase() === "h") setSlideshowControlsHidden(!state.slideshowControlsHidden);
     return;
   }
   if (!modal.classList.contains("hidden")) {
@@ -2745,10 +3164,6 @@ window.addEventListener("keydown", e => {
       return;
     }
     if (state.currentModalItem?.type === "video") {
-      if (e.key.toLowerCase() === "h") {
-        setModalControlsHidden(!state.modalControlsHidden);
-        return;
-      }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         showModalVideo(-1);
@@ -2762,12 +3177,16 @@ window.addEventListener("keydown", e => {
   }
   if (e.key === "Escape") {
     if (!modal.classList.contains("hidden")) closeModal();
+    else if (state.batchMode) setBatchMode(false);
     else if (state.immersive) setImmersive(false);
   }
 });
-document.addEventListener("fullscreenchange", updateFullscreenLabels);
+document.addEventListener("fullscreenchange", handleFullscreenChange);
 window.addEventListener("scroll", () => scheduleUpdatePlaying(), { passive: true });
-window.addEventListener("resize", () => scheduleUpdatePlaying());
+window.addEventListener("resize", () => {
+  applyLayout();
+  scheduleUpdatePlaying();
+});
 document.addEventListener("visibilitychange", () => {
   if (!state.pauseWhenInactive) return;
   if (document.hidden) {

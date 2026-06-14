@@ -19,17 +19,18 @@ It is designed for quickly scanning large folders of local short video assets, e
 - Browse drive roots, recent paths, and favorite paths from a cached split-layout left sidebar
 - Scan subfolders up to 2 levels below the selected folder
 - Configure filename exclusion keywords, enable or disable them, and apply them to images only or to all media
-- Switch between 4 / 5 / 6 / 7 / 8 / 9 / 12 / 16 columns
-- Limit simultaneous playback to 6 / 8 / 12 / 18 / 24 / 30 videos
+- Switch between 2-20 grid columns
+- Automatically play up to `columns x 2` visible videos for 2-9 columns; 10 columns or more use static wall previews
 - Autoplay visible videos silently in a loop
 - Pause off-screen videos and release distant resources, including old page resources during pagination, rescans, and modal close
 - Load wall images only near the viewport and release distant image resources without creating a disk thumbnail cache
 - Show a lightweight placeholder for videos over 500 MB unless large-file wall preview is enabled in Settings
-- Render large scan results in pages of 120 cards to avoid creating thousands of media elements at once
+- Render large scan results with an adjustable page-size input, capped at 240 cards per page
 - Show lightweight performance stats for scan time, render time, page items, and loaded media
 - Show scan counts and review status above the media grid on the right
 - Search by filename
 - Filter by file size and recent modified date
+- Reset search and filters without changing the current folder or review marks
 - Sort by modified time, filename, or file size
 - Shuffle browsing
 - Export the current review list to CSV

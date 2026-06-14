@@ -9,6 +9,14 @@
 - Added lightweight performance stats for scan time, render time, current page items, and loaded media.
 - Improved media resource cleanup during pagination, rescans, modal close, and slideshow close.
 - Added in-memory caching and a refresh action for the folder sidebar tree.
+- Updated the roadmap with future AI media management plans, including sidecar metadata, SQLite indexing, tags, batch operations, optional cache systems, and release packaging.
+- Improved Recycle Bin action feedback by releasing the current preview media after success and showing the actual backend error message when a file action fails.
+- Improved `service.bat` startup installation by replacing the fragile direct Startup `.vbs` entry with a Startup shortcut fallback that launches the hidden helper script, plus service log output for startup diagnostics.
+- Changed grid columns to support 2-20 columns and derive wall playback automatically from the selected column count.
+- Changed 10 or more columns to static wall previews instead of simultaneous inline video playback.
+- Changed page size from a dropdown to a numeric input capped at 240 grid items per page.
+- Added a reset-filters toolbar action that clears search and filters without changing the current folder or review marks.
+- Improved empty states so scanned folders with no media and filtered views with no matches show different messages.
 
 - Added per-item removal controls for favorite paths and path history while retaining the clear-all history action.
 - Added a saved setting for allowing wall previews of videos over 500 MB.

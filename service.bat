@@ -6,12 +6,15 @@ cd /d "%~dp0"
 set "APP_NAME=LocalCivitaiVideoWall"
 set "APP_URL=http://127.0.0.1:8787"
 set "APP_PORT=8787"
+set "TASK_NAME=LocalCivitaiVideoWall"
 set "SCRIPT_DIR=%~dp0"
 set "APP_PY=%SCRIPT_DIR%app.py"
 set "HELPER_DIR=%APPDATA%\LocalCivitaiVideoWall"
 set "VBS_PATH=%HELPER_DIR%\start_hidden.vbs"
+set "LOG_PATH=%HELPER_DIR%\service.log"
 set "STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "STARTUP_VBS=%STARTUP_DIR%\LocalCivitaiVideoWall.vbs"
+set "STARTUP_LNK=%STARTUP_DIR%\LocalCivitaiVideoWall.lnk"
 set "PY_CMD="
 set "COMMAND_MODE=0"
 
@@ -102,39 +105,50 @@ if not "%errorlevel%"=="0" (
   pause
   goto menu
 )
-if not exist "%STARTUP_DIR%" (
-  echo Startup folder was not found:
-  echo %STARTUP_DIR%
-  if "%COMMAND_MODE%"=="1" exit /b 1
-  pause
-  goto menu
+schtasks /Create /TN "%TASK_NAME%" /TR "wscript.exe ""%VBS_PATH%""" /SC ONLOGON /DELAY 0000:30 /RL LIMITED /F >nul 2>nul
+if not "%errorlevel%"=="0" (
+  schtasks /Create /TN "%TASK_NAME%" /TR "wscript.exe ""%VBS_PATH%""" /SC ONLOGON /RL LIMITED /F >nul 2>nul
 )
-> "%STARTUP_VBS%" echo Set shell = CreateObject("WScript.Shell")
->> "%STARTUP_VBS%" echo shell.Run Chr(34) ^& "%VBS_PATH%" ^& Chr(34), 0, False
-if exist "%STARTUP_VBS%" (
+if "%errorlevel%"=="0" (
+  if exist "%STARTUP_VBS%" del "%STARTUP_VBS%" >nul 2>nul
+  if exist "%STARTUP_LNK%" del "%STARTUP_LNK%" >nul 2>nul
   echo Startup entry installed.
-  echo It uses the current user's Startup folder and the APPDATA helper script.
+  echo It uses a Windows Task Scheduler logon task and the APPDATA helper script.
   if "%COMMAND_MODE%"=="1" exit /b 0
 ) else (
-  echo Failed to install startup entry.
-  if "%COMMAND_MODE%"=="1" exit /b 1
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut('%STARTUP_LNK%'); $shortcut.TargetPath = 'wscript.exe'; $shortcut.Arguments = [char]34 + '%VBS_PATH%' + [char]34; $shortcut.WorkingDirectory = '%HELPER_DIR%'; $shortcut.WindowStyle = 1; $shortcut.Description = 'Start Local Civitai Video Wall in the background'; $shortcut.Save()" >nul 2>nul
+  if exist "%STARTUP_LNK%" (
+    if exist "%STARTUP_VBS%" del "%STARTUP_VBS%" >nul 2>nul
+    echo Startup entry installed.
+    echo It uses the current user's Startup folder shortcut and the APPDATA helper script.
+    if "%COMMAND_MODE%"=="1" exit /b 0
+  ) else (
+    echo Failed to install startup entry.
+    if "%COMMAND_MODE%"=="1" exit /b 1
+  )
 )
 pause
 goto menu
 
 :uninstall_startup
 set "STARTUP_EXISTED=0"
+schtasks /Query /TN "%TASK_NAME%" >nul 2>nul
+if "%errorlevel%"=="0" (
+  set "STARTUP_EXISTED=1"
+  schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>nul
+)
 if exist "%STARTUP_VBS%" (
   set "STARTUP_EXISTED=1"
   del "%STARTUP_VBS%" >nul 2>nul
 )
+if exist "%STARTUP_LNK%" (
+  set "STARTUP_EXISTED=1"
+  del "%STARTUP_LNK%" >nul 2>nul
+)
 if "%STARTUP_EXISTED%"=="0" (
   echo Startup entry was not installed.
-) else if not exist "%STARTUP_VBS%" (
-  echo Startup entry removed.
 ) else (
-  echo Failed to remove startup entry.
-  if "%COMMAND_MODE%"=="1" exit /b 1
+  echo Startup entry removed.
 )
 if "%COMMAND_MODE%"=="1" exit /b 0
 pause
@@ -159,6 +173,17 @@ if exist "%VBS_PATH%" (
   echo Helper status: exists
 ) else (
   echo Helper status: not created yet
+)
+echo Log path: %LOG_PATH%
+schtasks /Query /TN "%TASK_NAME%" >nul 2>nul
+if "%errorlevel%"=="0" (
+  echo Startup task: installed
+) else if exist "%STARTUP_LNK%" (
+  echo Startup task: Startup-folder shortcut exists
+) else if exist "%STARTUP_VBS%" (
+  echo Startup task: legacy Startup-folder entry exists
+) else (
+  echo Startup task: not installed
 )
 echo.
 if "%COMMAND_MODE%"=="1" exit /b 0
@@ -237,8 +262,13 @@ if "%RUNNING%"=="1" (
 ) else (
   echo Service status: stopped
 )
-if exist "%STARTUP_VBS%" (
+schtasks /Query /TN "%TASK_NAME%" >nul 2>nul
+if "%errorlevel%"=="0" (
   echo Startup status: installed
+) else if exist "%STARTUP_LNK%" (
+  echo Startup status: installed ^(Startup shortcut^)
+) else if exist "%STARTUP_VBS%" (
+  echo Startup status: installed ^(legacy Startup folder^)
 ) else (
   echo Startup status: not installed
 )
@@ -247,9 +277,11 @@ exit /b 0
 :write_vbs
 call :ensure_helper_dir
 if not "%errorlevel%"=="0" exit /b 1
-> "%VBS_PATH%" echo Set shell = CreateObject("WScript.Shell")
+> "%VBS_PATH%" echo Option Explicit
+>> "%VBS_PATH%" echo Dim shell
+>> "%VBS_PATH%" echo Set shell = CreateObject("WScript.Shell")
 >> "%VBS_PATH%" echo shell.CurrentDirectory = "%SCRIPT_DIR%"
->> "%VBS_PATH%" echo shell.Run "%PY_CMD% " ^& Chr(34) ^& "%APP_PY%" ^& Chr(34), 0, False
+>> "%VBS_PATH%" echo shell.Run "cmd.exe /d /c cd /d " ^& Chr(34) ^& "%SCRIPT_DIR%" ^& Chr(34) ^& " && %PY_CMD% " ^& Chr(34) ^& "%APP_PY%" ^& Chr(34) ^& " >> " ^& Chr(34) ^& "%LOG_PATH%" ^& Chr(34) ^& " 2>>&1", 0, False
 exit /b 0
 
 :is_running

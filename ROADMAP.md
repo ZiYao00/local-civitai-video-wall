@@ -37,7 +37,7 @@ Completed:
 
 - Mixed image + video browsing
 - Safe move actions to `_video_wall_review`
-- Safe trash actions to `_video_wall_trash`
+- Safe trash actions, later changed to the Windows Recycle Bin
 - Local-only review data
 - Safer file handling without permanent deletion by default
 
@@ -103,15 +103,60 @@ Completed:
 
 These are not commitments. They are possible directions if the tool keeps growing.
 
-- Tag system
+### Near-Term Product Direction
+
+The project can grow from a local media wall into a local AI video asset screener and manager for Civitai / Wan / Kling / Runway / ComfyUI-style generated media.
+
+Recommended priorities:
+
+- Continue code cleanup and performance work before adding heavier cache systems.
+- Improve repeated folder switching, path history, and folder sidebar reliability.
+- Keep destructive file operations reversible and clearly confirmed.
+- Keep image thumbnail cache and video first-frame cache optional future work, not a default requirement.
+
+### Metadata And AI Generation Context
+
+- Read sidecar metadata files, especially same-name `.json` files next to images or videos.
+- Extract Prompt, negative prompt, model name, workflow/source app, seed, source URL, Civitai download information, and generation parameters when available.
+- Show metadata in the media modal without making the card grid visually crowded.
+- Add metadata search and filters after the basic reader is stable.
+
+### Lightweight Index
+
+- Add an optional SQLite index for repeated scans.
+- Store file path, modified time, size, media type, hash or fingerprint, scan status, favorite, selected, tags, and extracted metadata summary.
+- Start with scan acceleration and read-only metadata lookup before moving review state fully into SQLite.
+- Keep a rebuild / repair index action so users can recover from stale local state.
+
+### Tags And Batch Review
+
+- Add user tags for review workflows, such as reference, usable, reject, published, pending edit, character, style, or project.
+- Add batch selection, batch favorite / selected updates, batch tag editing, and batch move actions.
+- Keep batch operations previewable and reversible where possible.
+- Consider a compact selection mode for large folders.
+
+### Optional Cache Systems
+
+- Optional thumbnail cache for large images.
+- Optional video cover cache, such as first frame or a 3-second frame.
+- Add cache size limits, cleanup controls, and invalidation rules before enabling persistent caches.
+- Avoid scanning generated cache files as normal media.
+
+### Packaging And Documentation
+
+- Keep English and Chinese README files synchronized.
+- Add clearer installation, startup, service menu, and troubleshooting sections.
+- Publish GitHub Releases with a ZIP package for non-technical users.
+- Consider a one-click startup package after the current Python workflow is stable.
+- Use GitHub Packages only later if the project becomes a Docker image or formal package.
+
+### Other Ideas
+
 - Star rating
 - Folder presets
 - Contact sheet export
-- Release ZIP packaging
-- Optional thumbnail cache
 - Slideshow drift strength presets
 - More keyboard shortcuts
-- Better batch review workflow
 - Optional media statistics dashboard
 
 ## Packaging Ideas

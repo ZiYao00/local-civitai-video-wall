@@ -15,8 +15,8 @@ v2 changes:
 - Windows folder picker button.
 - Remember path checkbox.
 - Recursive scan checkbox.
-- Adjustable columns: 4 / 5 / 6 / 7 / 8 / 9.
-- Playback limit: 12 / 18 / 24 / 30.
+- Adjustable columns: 2-20.
+- Inline wall playback is derived from column count.
 - Compact topbar and immersive mode.
 - English interface by default with Chinese language toggle.
 """
@@ -62,7 +62,8 @@ DEFAULT_CONFIG = {
     "filename_exclude_keywords": ["fanart", "thumb"],
     "filename_exclude_scope": "image",
     "columns": 6,
-    "play_limit": 24,
+    "page_size": 120,
+    "play_limit": 12,
     "wall_autoplay": True,
     "preview_large_videos": False,
     "pause_when_inactive": False,
@@ -102,6 +103,10 @@ def clamp_int(value, default: int, low: int, high: int) -> int:
     except Exception:
         n = default
     return max(low, min(high, n))
+
+
+def play_limit_for_columns(columns: int) -> int:
+    return 0 if columns >= 10 else columns * 2
 
 
 def clean_path_list(value, max_items: int = 30) -> list[str]:
@@ -161,8 +166,9 @@ def load_config() -> dict:
     cfg.update({k: data.get(k, v) for k, v in DEFAULT_CONFIG.items()})
     if not cfg.get("remember_path"):
         cfg["last_video_dir"] = ""
-    cfg["columns"] = clamp_int(cfg.get("columns"), 6, 4, 16)
-    cfg["play_limit"] = clamp_int(cfg.get("play_limit"), 24, 6, 30)
+    cfg["columns"] = clamp_int(cfg.get("columns"), 6, 2, 20)
+    cfg["page_size"] = clamp_int(cfg.get("page_size"), 120, 1, 240)
+    cfg["play_limit"] = play_limit_for_columns(cfg["columns"])
     cfg["wall_autoplay"] = bool(cfg.get("wall_autoplay", True))
     cfg["pause_when_inactive"] = bool(cfg.get("pause_when_inactive", False))
     cfg["confirm_trash"] = bool(cfg.get("confirm_trash", True))
@@ -195,8 +201,9 @@ def save_config(cfg: dict) -> dict:
     merged["remember_path"] = bool(merged.get("remember_path"))
     merged["recursive"] = bool(merged.get("recursive"))
     merged["immersive"] = bool(merged.get("immersive"))
-    merged["columns"] = clamp_int(merged.get("columns"), 6, 4, 16)
-    merged["play_limit"] = clamp_int(merged.get("play_limit"), 24, 6, 30)
+    merged["columns"] = clamp_int(merged.get("columns"), 6, 2, 20)
+    merged["page_size"] = clamp_int(merged.get("page_size"), 120, 1, 240)
+    merged["play_limit"] = play_limit_for_columns(merged["columns"])
     merged["wall_autoplay"] = bool(merged.get("wall_autoplay", True))
     merged["pause_when_inactive"] = bool(merged.get("pause_when_inactive", False))
     merged["confirm_trash"] = bool(merged.get("confirm_trash", True))
@@ -1007,8 +1014,9 @@ class AppHandler(BaseHTTPRequestHandler):
             exclude_keywords = clean_exclude_keywords(payload.get("filename_exclude_keywords"), 30)
             exclude_scope = "all" if payload.get("filename_exclude_scope") == "all" else "image"
             remember_path = bool(payload.get("remember_path", False))
-            columns = clamp_int(payload.get("columns"), 6, 4, 16)
-            play_limit = clamp_int(payload.get("play_limit"), 24, 6, 30)
+            columns = clamp_int(payload.get("columns"), 6, 2, 20)
+            page_size = clamp_int(payload.get("page_size"), 120, 1, 240)
+            play_limit = play_limit_for_columns(columns)
             sort_mode = payload.get("sort_mode", "mtime_desc")
             immersive = bool(payload.get("immersive", False))
             language = normalize_language(payload.get("language", "en"))
@@ -1030,6 +1038,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 "filename_exclude_keywords": exclude_keywords,
                 "filename_exclude_scope": exclude_scope,
                 "columns": columns,
+                "page_size": page_size,
                 "play_limit": play_limit,
                 "wall_autoplay": bool(payload.get("wall_autoplay", DEFAULT_CONFIG["wall_autoplay"])),
                 "preview_large_videos": bool(payload.get("preview_large_videos", DEFAULT_CONFIG["preview_large_videos"])),
@@ -1069,8 +1078,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 "filename_exclude_scope": "all" if payload.get(
                     "filename_exclude_scope", cfg.get("filename_exclude_scope", "image")
                 ) == "all" else "image",
-                "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 4, 16),
-                "play_limit": clamp_int(payload.get("play_limit", cfg.get("play_limit", 24)), 24, 6, 30),
+                "columns": clamp_int(payload.get("columns", cfg.get("columns", 6)), 6, 2, 20),
+                "page_size": clamp_int(payload.get("page_size", cfg.get("page_size", 120)), 120, 1, 240),
                 "wall_autoplay": bool(payload.get("wall_autoplay", cfg.get("wall_autoplay", True))),
                 "preview_large_videos": bool(payload.get("preview_large_videos", cfg.get("preview_large_videos", False))),
                 "pause_when_inactive": bool(payload.get("pause_when_inactive", cfg.get("pause_when_inactive", False))),

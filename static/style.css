@@ -114,7 +114,23 @@
 
 .slideshow-image.effect-drift{animation:slideDriftMove var(--drift-duration,5000ms) ease both,driftFadeIn 720ms ease both}.slideshow-image.effect-drift-out{animation:driftFadeOut ease both}.slideshow-image.effect-slide-out.to-left{animation:slideOutLeft ease both}.slideshow-image.effect-slide-out.to-right{animation:slideOutRight ease both}@keyframes slideDriftMove{from{transform:translate(var(--sx),var(--sy)) scale(1.02)}to{transform:translate(var(--ex),var(--ey)) scale(1.12)}}@keyframes driftFadeIn{from{opacity:0}to{opacity:1}}@keyframes driftFadeOut{from{opacity:1}to{opacity:0}}@keyframes slideOutLeft{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(-8%)}}@keyframes slideOutRight{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(8%)}}
 
-#playLimitSelect{width:138px}
+.page-size-input{
+  width:96px;
+  height:34px;
+  padding:0 8px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  color:var(--text);
+  outline:none;
+  text-align:center;
+}
+
+.toolbar-label{
+  color:var(--muted);
+  font-size:13px;
+  white-space:nowrap;
+}
 
 .modal-hidden-actions,.slideshow-hidden-actions{
   position:absolute;
@@ -285,6 +301,14 @@ body.theme-light .modal-header{
   background:rgba(255,255,255,.92);
 }
 
+body.theme-light .batch-bar{
+  background:rgba(255,255,255,.9);
+}
+
+body.theme-light .modal-metadata{
+  background:rgba(255,255,255,.95);
+}
+
 body.theme-light .modal-content.is-video .modal-header{
   background:linear-gradient(to bottom,rgba(0,0,0,.48),rgba(0,0,0,0));
   color:white;
@@ -418,6 +442,7 @@ body.theme-light.icon-buttons .modal-video-controls .seg button.active{
   align-items:center;
   gap:8px;
   min-width:0;
+  flex-wrap:nowrap;
   overflow-x:auto;
   overflow-y:hidden;
   scrollbar-width:thin;
@@ -428,20 +453,21 @@ body.theme-light.icon-buttons .modal-video-controls .seg button.active{
 }
 
 .path-row .path-input{
-  flex:1 0 320px;
-  min-width:220px;
+  flex:1 1 320px;
+  min-width:120px;
 }
 
 .path-row .search{
-  flex:1 0 190px;
+  flex:1 1 190px;
+  min-width:110px;
   max-width:280px;
 }
 
 .path-combo{
   position:relative;
   height:34px;
-  flex:1 0 360px;
-  min-width:260px;
+  flex:2 1 360px;
+  min-width:180px;
   display:flex;
   align-items:center;
   gap:2px;
@@ -916,15 +942,19 @@ body.theme-light .settings-dialog-panel{background:#fff}
   }
   .path-row{
     padding-bottom:2px;
+    flex-wrap:nowrap;
   }
   .path-row .path-input{
-    flex-basis:260px;
+    flex-basis:220px;
+    min-width:110px;
   }
   .path-row .path-combo{
-    flex-basis:300px;
+    flex-basis:260px;
+    min-width:170px;
   }
   .path-row .search{
-    flex-basis:170px;
+    flex-basis:150px;
+    min-width:100px;
   }
   .modal-content{
     inset:16px;
@@ -966,13 +996,13 @@ body.theme-light .settings-dialog-panel{background:#fff}
     gap:10px;
   }
   .path-row .path-input{
-    flex-basis:220px;
+    flex-basis:180px;
   }
   .path-row .path-combo{
-    flex-basis:240px;
+    flex-basis:210px;
   }
   .path-row .search{
-    flex-basis:160px;
+    flex-basis:120px;
   }
   .settings-menu{
     right:8px;
@@ -1068,7 +1098,20 @@ body.sidebar-open .app-shell{
   width:100%;
   max-width:100%;
   min-width:0;
+  padding-left:0;
+  padding-right:0;
   overflow-x:hidden;
+}
+
+#subInfo,
+#batchBar,
+#grid,
+#gridPager,
+#emptyState{
+  width:var(--content-width,75vw);
+  max-width:calc(100% - 24px);
+  margin-left:auto;
+  margin-right:auto;
 }
 
 .folder-panel{
@@ -1263,15 +1306,264 @@ body.theme-light .path-suggest-menu{
 body.theme-light .grid-pager{background:rgba(255,255,255,.94)}
 
 .video-grid{
-  width:100%;
   min-width:0;
-  grid-template-columns:repeat(var(--columns),minmax(0,var(--card-w)));
+  grid-template-columns:repeat(var(--columns),minmax(0,1fr));
 }
 
 .video-card{
   width:100%;
-  max-width:var(--card-w);
+  max-width:none;
   justify-self:center;
+}
+
+.card-quick-actions{
+  position:absolute;
+  top:8px;
+  left:8px;
+  right:8px;
+  z-index:2;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  pointer-events:none;
+}
+
+.card-quick-actions .review-btn{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  padding:0;
+  border-radius:999px;
+  border:0;
+  background:rgba(0,0,0,.38);
+  color:rgba(255,255,255,.82);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+  backdrop-filter:blur(8px);
+  pointer-events:none;
+}
+
+.card-quick-actions .review-btn:hover{
+  background:rgba(0,0,0,.58);
+  color:white;
+}
+
+.card-quick-actions .card-favorite-btn.active{
+  color:rgb(255,210,86);
+  background:rgba(0,0,0,.62);
+}
+
+.batch-select-btn{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.48);
+  background:rgba(0,0,0,.28);
+  color:rgba(255,255,255,.82);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+  backdrop-filter:blur(8px);
+  pointer-events:auto;
+  cursor:pointer;
+  opacity:0;
+  transform:scale(.92);
+  transition:opacity .14s ease,transform .14s ease,background .14s ease;
+}
+
+body.batch-mode .batch-select-btn{
+  opacity:1;
+  transform:scale(1);
+  pointer-events:auto;
+}
+
+.batch-select-btn:hover{
+  background:rgba(0,0,0,.58);
+  color:white;
+}
+
+.batch-select-btn.active{
+  border-color:rgba(255,255,255,.76);
+  color:white;
+  background:rgba(88,119,255,.86);
+}
+
+.video-card.is-batch-selected{
+  box-shadow:0 0 0 2px rgba(88,119,255,.72),0 18px 42px rgba(0,0,0,.38);
+}
+
+.batch-bar{
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:rgba(34,35,39,.82);
+  backdrop-filter:blur(12px);
+}
+
+.batch-bar span{
+  margin-right:auto;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.batch-bar .btn{
+  height:30px;
+  border-radius:8px;
+}
+
+.modal-metadata{
+  position:absolute;
+  top:58px;
+  right:0;
+  bottom:0;
+  z-index:2;
+  width:min(380px,28vw);
+  padding:16px;
+  overflow:auto;
+  border-left:1px solid var(--line);
+  background:rgba(18,19,22,.94);
+  backdrop-filter:blur(12px);
+}
+
+.modal-content:not(.is-video) .modal-image{
+  padding-right:calc(min(380px,28vw) + 92px);
+}
+
+.modal-content.is-video .modal-metadata,
+.modal-content:fullscreen .modal-metadata{
+  display:none;
+}
+
+.metadata-title{
+  margin-bottom:12px;
+  font-size:14px;
+  font-weight:700;
+}
+
+.metadata-note{
+  margin:0 0 12px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5;
+}
+
+.metadata-block{
+  padding:10px 0;
+  border-top:1px solid var(--line);
+}
+
+.metadata-block-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:7px;
+}
+
+.metadata-block-head strong{
+  min-width:0;
+  color:var(--text);
+  font-size:12px;
+}
+
+.metadata-block p{
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+  word-break:break-word;
+}
+
+.metadata-copy{
+  flex:0 0 auto;
+  height:24px;
+  padding:0 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.045);
+  color:var(--muted);
+  cursor:pointer;
+  font-size:11px;
+}
+
+.metadata-copy:hover{
+  color:var(--text);
+  background:rgba(255,255,255,.08);
+}
+
+.modal-header,
+.modal-video-controls,
+.slideshow-top,
+.slideshow-controls{
+  transition:opacity .26s ease,transform .26s ease;
+}
+
+.modal-content:not(.is-video) .modal-header{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  z-index:5;
+  border-bottom:0;
+  background:linear-gradient(to bottom,rgba(0,0,0,.58),rgba(0,0,0,0));
+  padding:14px 16px 28px;
+}
+
+.modal-content.controls-hidden .modal-header,
+.modal-content.is-video.controls-hidden .modal-header,
+.modal-content.is-video.controls-hidden .modal-video-controls,
+.modal-content.is-video:fullscreen.controls-hidden .modal-header,
+.modal-content.is-video:fullscreen.controls-hidden .modal-video-controls{
+  display:flex;
+  opacity:0;
+  pointer-events:none;
+}
+
+.modal-content.controls-hidden .modal-header{
+  transform:translateY(-4px);
+}
+
+.slideshow.controls-hidden .slideshow-top,
+.slideshow.controls-hidden .slideshow-controls{
+  display:flex;
+  opacity:0;
+  pointer-events:none;
+}
+
+.slideshow.controls-hidden .slideshow-top{
+  transform:translateY(-4px);
+}
+
+.modalImageUiToggle,
+#modalImageUiToggle,
+#modalVideoUiToggle,
+#slideshowUiToggle,
+#modalUiShow,
+#slideshowUiShow{
+  display:none!important;
+}
+
+@media (max-width:1180px){
+  .modal-metadata{
+    display:none;
+  }
+
+  .modal-content:not(.is-video) .modal-image{
+    padding-right:74px;
+  }
+}
+
+@media (max-width:760px){
+  .modal-content:not(.is-video) .modal-image{
+    padding-right:48px;
+  }
 }
 
 .settings-field{
@@ -1295,15 +1587,19 @@ body.theme-light .grid-pager{background:rgba(255,255,255,.94)}
   padding:0 6px;
 }
 
-body.font-size-small{font-size:13px}
-body.font-size-large{font-size:16px}
+body.font-size-small{font-size:12px}
+body.font-size-standard{font-size:13px}
+body.font-size-large{font-size:15px}
 
-body.font-size-small :is(.btn,.path-input,.search,.select,.check,.seg button){font-size:12px}
-body.font-size-large :is(.btn,.path-input,.search,.select,.check,.seg button){font-size:15px}
-body.font-size-small :is(.video-name,.status-bar,.folder-empty,.settings-dialog-note){font-size:11px}
-body.font-size-large :is(.video-name,.status-bar,.folder-empty,.settings-dialog-note){font-size:14px}
-body.font-size-small :is(.meta,.folder-panel-title,.settings-title,.settings-field-label){font-size:10px}
-body.font-size-large :is(.meta,.folder-panel-title,.settings-title,.settings-field-label){font-size:13px}
+body.font-size-small :is(.btn,.path-input,.search,.select,.check,.seg button){font-size:11px}
+body.font-size-standard :is(.btn,.path-input,.search,.select,.check,.seg button){font-size:12px}
+body.font-size-large :is(.btn,.path-input,.search,.select,.check,.seg button){font-size:14px}
+body.font-size-small :is(.video-name,.status-bar,.folder-empty,.settings-dialog-note){font-size:10px}
+body.font-size-standard :is(.video-name,.status-bar,.folder-empty,.settings-dialog-note){font-size:11px}
+body.font-size-large :is(.video-name,.status-bar,.folder-empty,.settings-dialog-note){font-size:13px}
+body.font-size-small :is(.meta,.folder-panel-title,.settings-title,.settings-field-label){font-size:9px}
+body.font-size-standard :is(.meta,.folder-panel-title,.settings-title,.settings-field-label){font-size:10px}
+body.font-size-large :is(.meta,.folder-panel-title,.settings-title,.settings-field-label){font-size:12px}
 body.font-size-large :is(.path-input,.search,.select,.btn,.check,.seg){height:38px}
 body.font-size-large .seg button{height:30px}
 body.font-size-large .path-combo{height:38px}
